@@ -2,26 +2,66 @@ import React, { useState, useEffect } from 'react';
 import {
   Accordion, AccordionSummary, AccordionDetails, Typography,
   TextField, FormControl, InputLabel, Select, MenuItem,
-  OutlinedInput, Checkbox, ListItemText, Button, Grid,
-  FormControlLabel, Slider, Box
+  OutlinedInput, Checkbox, ListItemText, Button,
+  FormControlLabel, ToggleButton, ToggleButtonGroup, Box
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { patronService } from '../services/api';
 
+const FILTRES_ACTIFS = true;
+
+const TYPES_AVEC_MANCHES = [
+  'Robe', 'Top', 'Combi', 'Salopette', 'Chemise', 'Blouse', 'Tee-Shirt',
+  'Marinière', 'Sweat', 'Sweat Zippé', 'Débardeur', 'Body', 'Chemisier',
+  'Pull', 'Gilet', 'Nuit', 'Polo'
+];
+const TYPES_AVEC_LONGUEUR = ['Robe', 'Jupe', 'Combi', 'Salopette'];
+
+const METRAGE_RANGES = [
+  { label: '< 1m',  value: '<1',  min: 0, max: 1 },
+  { label: '1–2m',  value: '1-2', min: 1, max: 2 },
+  { label: '2–3m',  value: '2-3', min: 2, max: 3 },
+  { label: '3–4m',  value: '3-4', min: 3, max: 4 },
+  { label: '4–5m',  value: '4-5', min: 4, max: 5 },
+  { label: '5m +',  value: '5+',  min: 5, max: 99 },
+];
+
+const filterSelectSx = {
+  '& .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: '#a8c8e0', transition: 'border-color 0.2s' },
+  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a' },
+  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a', borderWidth: 2 },
+  minHeight: 56,
+};
+
+const filterInputLabelSx = {
+  fontWeight: 600, color: '#33658a',
+  '&.Mui-focused': { color: '#33658a' }
+};
+
+const filterFieldSx = {
+  '& .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: '#a8c8e0', transition: 'border-color 0.2s' },
+  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a' },
+  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a', borderWidth: 2 },
+  '& .MuiInputLabel-root': { fontWeight: 600, color: '#33658a' },
+  '& .MuiInputLabel-root.Mui-focused': { color: '#33658a' },
+};
+
 function PatronFilters({ onFilter }) {
   const [filters, setFilters] = useState({
     searchText: '',
+    langues: [],
     genres: [],
     types: [],
+    typeAccessoires: [],
     manches: [],
     longueurs: [],
     tissuTypes: [],
     tissuSpecifique: [],
     details: [],
     taillesDisponibles: [],
+    taillesEnfant: [],
     formats: { projecteur: false, a4: false, a0: false },
-    metrageMin: 0,
-    metrageMax: 10,
+    metrageRanges: [],
     cousu: undefined
   });
 
@@ -34,12 +74,24 @@ function PatronFilters({ onFilter }) {
     tissuSpecifique: [],
     details: [],
     taillesDisponibles: [],
+    taillesEnfant: [],
     formats: []
   });
 
   useEffect(() => {
     loadOptions();
   }, []);
+
+  const buildBackendFilters = (f) => {
+    const { metrageRanges, ...rest } = f;
+    if (!metrageRanges || metrageRanges.length === 0) return rest;
+    const selected = METRAGE_RANGES.filter(r => metrageRanges.includes(r.value));
+    return { ...rest, metrageRanges: selected.map(r => ({ min: r.min, max: r.max })) };
+  };
+
+  useEffect(() => {
+    if (FILTRES_ACTIFS) onFilter(buildBackendFilters(filters));
+  }, [filters]);
 
   const loadOptions = async () => {
     try {
@@ -50,254 +102,320 @@ function PatronFilters({ onFilter }) {
     }
   };
 
+  const isTypeDisabled = (type) => {
+    if (filters.manches.length > 0 && !TYPES_AVEC_MANCHES.includes(type)) return true;
+    if (filters.longueurs.length > 0 && !TYPES_AVEC_LONGUEUR.includes(type)) return true;
+    return false;
+  };
+
   const handleChange = (field, value) => {
     const newFilters = { ...filters, [field]: value };
     setFilters(newFilters);
   };
 
+  const handleGenresChange = (newGenres) => {
+    const wasAccessoire = filters.genres.includes('Accessoire');
+    const isNowAccessoire = newGenres.includes('Accessoire');
+    const wasEnfant = filters.genres.some(g => g === 'Enfant' || g === 'Bébé');
+    const isNowEnfant = newGenres.some(g => g === 'Enfant' || g === 'Bébé');
+
+    const updates = { genres: newGenres };
+    if (!wasAccessoire && isNowAccessoire) {
+      updates.types = [];
+      updates.manches = [];
+      updates.longueurs = [];
+    } else if (wasAccessoire && !isNowAccessoire) {
+      updates.typeAccessoires = [];
+    }
+    if (!wasEnfant && isNowEnfant) {
+      updates.taillesDisponibles = [];
+    } else if (wasEnfant && !isNowEnfant) {
+      updates.taillesEnfant = [];
+    }
+    setFilters({ ...filters, ...updates });
+  };
+
   const handleApplyFilters = () => {
-    onFilter(filters);
+    if (FILTRES_ACTIFS) onFilter(buildBackendFilters(filters));
   };
 
   const handleReset = () => {
     const resetFilters = {
       searchText: '',
+      langues: [],
       genres: [],
       types: [],
+      typeAccessoires: [],
       manches: [],
       longueurs: [],
       tissuTypes: [],
       tissuSpecifique: [],
       details: [],
       taillesDisponibles: [],
+      taillesEnfant: [],
       formats: { projecteur: false, a4: false, a0: false },
-      metrageMin: 0,
-      metrageMax: 10,
+      metrageRanges: [],
       cousu: undefined
     };
     setFilters(resetFilters);
     onFilter(resetFilters);
   };
 
+  const grid3 = { display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 };
+
   return (
-    <Accordion>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Typography variant="h6">🔍 Filtres</Typography>
+    <Accordion sx={{ bgcolor: '#ffddd2', borderRadius: '8px !important', boxShadow: '0 4px 16px rgba(51,101,138,0.12)', mb: 2 }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: '#33658a' }} />}
+        sx={{ bgcolor: '#ffddd2', borderRadius: '8px', '&.Mui-expanded': { borderBottom: '2px solid #a8c8e0' } }}>
+        <Typography variant="h6" sx={{ color: '#1e4d6b', fontWeight: 700 }}>🔍 Filtres</Typography>
       </AccordionSummary>
       <AccordionDetails>
-        <Grid container spacing={2}>
-          <Grid item xs={12}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+
+          {/* Ligne 1 : Recherche | Déjà cousu | Langue */}
+          <Box sx={grid3}>
             <TextField
               fullWidth
               label="Recherche (marque, modèle, notes)"
               value={filters.searchText}
               onChange={(e) => handleChange('searchText', e.target.value)}
+              sx={filterFieldSx}
             />
-          </Grid>
-
-          <Grid item xs={12} md={6}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={filters.cousu === true}
+                    onChange={(e) => handleChange('cousu', e.target.checked ? true : undefined)}
+                    sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }}
+                  />
+                }
+                label={<span style={{ fontWeight: 600, color: '#33658a' }}>✂️ Déjà cousu uniquement</span>}
+              />
+            </Box>
             <FormControl fullWidth>
-              <InputLabel>Genres</InputLabel>
-              <Select
-                multiple
-                value={filters.genres}
-                onChange={(e) => handleChange('genres', e.target.value)}
+              <InputLabel sx={filterInputLabelSx}>Langue</InputLabel>
+              <Select multiple value={filters.langues}
+                onChange={(e) => handleChange('langues', e.target.value)}
+                input={<OutlinedInput label="Langue" />}
+                renderValue={(selected) => selected.join(', ')}
+                sx={filterSelectSx}>
+                {['Français', 'Anglais', 'Allemand', 'Autre'].map((lang) => (
+                  <MenuItem key={lang} value={lang}>
+                    <Checkbox checked={filters.langues.indexOf(lang) > -1} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
+                    <ListItemText primary={lang} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+
+          {/* Ligne 2 : Genre | Type | Tailles */}
+          <Box sx={grid3}>
+            <FormControl fullWidth>
+              <InputLabel sx={filterInputLabelSx}>Genres</InputLabel>
+              <Select multiple value={filters.genres}
+                onChange={(e) => handleGenresChange(e.target.value)}
                 input={<OutlinedInput label="Genres" />}
                 renderValue={(selected) => selected.join(', ')}
-              >
+                sx={filterSelectSx}>
                 {options.genres.map((genre) => (
                   <MenuItem key={genre} value={genre}>
-                    <Checkbox checked={filters.genres.indexOf(genre) > -1} />
+                    <Checkbox checked={filters.genres.indexOf(genre) > -1} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
                     <ListItemText primary={genre} />
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-          </Grid>
 
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth>
-              <InputLabel>Types</InputLabel>
-              <Select
-                multiple
-                value={filters.types}
-                onChange={(e) => handleChange('types', e.target.value)}
-                input={<OutlinedInput label="Types" />}
-                renderValue={(selected) => selected.join(', ')}
-              >
-                {options.types.map((type) => (
-                  <MenuItem key={type} value={type}>
-                    <Checkbox checked={filters.types.indexOf(type) > -1} />
-                    <ListItemText primary={type} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
+            {filters.genres.includes('Accessoire') ? (
+              <FormControl fullWidth>
+                <InputLabel sx={filterInputLabelSx}>Type d'accessoire</InputLabel>
+                <Select multiple value={filters.typeAccessoires}
+                  onChange={(e) => handleChange('typeAccessoires', e.target.value)}
+                  input={<OutlinedInput label="Type d'accessoire" />}
+                  renderValue={(selected) => selected.join(', ')}
+                  sx={filterSelectSx}>
+                  {(options.typeAccessoires || []).map((type) => (
+                    <MenuItem key={type} value={type}>
+                      <Checkbox checked={filters.typeAccessoires.indexOf(type) > -1} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
+                      <ListItemText primary={type} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : (
+              <FormControl fullWidth>
+                <InputLabel sx={filterInputLabelSx}>Types</InputLabel>
+                <Select multiple value={filters.types}
+                  onChange={(e) => handleChange('types', e.target.value)}
+                  input={<OutlinedInput label="Types" />}
+                  renderValue={(selected) => selected.join(', ')}
+                  sx={filterSelectSx}>
+                  {options.types.map((type) => (
+                    <MenuItem key={type} value={type} disabled={isTypeDisabled(type)}>
+                      <Checkbox checked={filters.types.indexOf(type) > -1} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
+                      <ListItemText primary={type} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
 
-          <Grid item xs={12} md={6}>
+            {filters.genres.some(g => g === 'Enfant' || g === 'Bébé') ? (
+              <FormControl fullWidth>
+                <InputLabel sx={filterInputLabelSx}>Tailles enfant</InputLabel>
+                <Select multiple value={filters.taillesEnfant}
+                  onChange={(e) => handleChange('taillesEnfant', e.target.value)}
+                  input={<OutlinedInput label="Tailles enfant" />}
+                  renderValue={(selected) => selected.join(', ')}
+                  sx={filterSelectSx}>
+                  {(options.taillesEnfant || []).map((taille) => (
+                    <MenuItem key={taille} value={taille}>
+                      <Checkbox checked={filters.taillesEnfant.indexOf(taille) > -1} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
+                      <ListItemText primary={taille} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : (
+              <FormControl fullWidth>
+                <InputLabel sx={filterInputLabelSx}>Tailles adulte</InputLabel>
+                <Select multiple value={filters.taillesDisponibles}
+                  onChange={(e) => handleChange('taillesDisponibles', e.target.value)}
+                  input={<OutlinedInput label="Tailles adulte" />}
+                  renderValue={(selected) => selected.join(', ')}
+                  sx={filterSelectSx}>
+                  {options.taillesDisponibles.map((taille) => (
+                    <MenuItem key={taille} value={taille}>
+                      <Checkbox checked={filters.taillesDisponibles.indexOf(taille) > -1} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
+                      <ListItemText primary={taille} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+          </Box>
+
+          {/* Ligne 3 : Manches | Longueurs | Détails */}
+          <Box sx={grid3}>
             <FormControl fullWidth>
-              <InputLabel>Manches</InputLabel>
-              <Select
-                multiple
-                value={filters.manches}
+              <InputLabel sx={filterInputLabelSx}>Manches</InputLabel>
+              <Select multiple value={filters.manches}
                 onChange={(e) => handleChange('manches', e.target.value)}
                 input={<OutlinedInput label="Manches" />}
                 renderValue={(selected) => selected.join(', ')}
-              >
+                sx={filterSelectSx}>
                 {options.manches.map((manche) => (
                   <MenuItem key={manche} value={manche}>
-                    <Checkbox checked={filters.manches.indexOf(manche) > -1} />
+                    <Checkbox checked={filters.manches.indexOf(manche) > -1} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
                     <ListItemText primary={manche} />
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-          </Grid>
 
-          <Grid item xs={12} md={6}>
             <FormControl fullWidth>
-              <InputLabel>Longueurs</InputLabel>
-              <Select
-                multiple
-                value={filters.longueurs}
+              <InputLabel sx={filterInputLabelSx}>Longueurs</InputLabel>
+              <Select multiple value={filters.longueurs}
                 onChange={(e) => handleChange('longueurs', e.target.value)}
                 input={<OutlinedInput label="Longueurs" />}
                 renderValue={(selected) => selected.join(', ')}
-              >
+                sx={filterSelectSx}>
                 {options.longueurs.map((longueur) => (
                   <MenuItem key={longueur} value={longueur}>
-                    <Checkbox checked={filters.longueurs.indexOf(longueur) > -1} />
+                    <Checkbox checked={filters.longueurs.indexOf(longueur) > -1} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
                     <ListItemText primary={longueur} />
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-          </Grid>
 
-          <Grid item xs={12} md={6}>
             <FormControl fullWidth>
-              <InputLabel>Type de tissu</InputLabel>
-              <Select
-                multiple
-                value={filters.tissuTypes}
-                onChange={(e) => handleChange('tissuTypes', e.target.value)}
-                input={<OutlinedInput label="Type de tissu" />}
-                renderValue={(selected) => selected.join(', ')}
-              >
-                {options.tissuTypes.map((type) => (
-                  <MenuItem key={type} value={type}>
-                    <Checkbox checked={filters.tissuTypes.indexOf(type) > -1} />
-                    <ListItemText primary={type} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth>
-              <InputLabel>Tissus spécifiques</InputLabel>
-              <Select
-                multiple
-                value={filters.tissuSpecifique}
-                onChange={(e) => handleChange('tissuSpecifique', e.target.value)}
-                input={<OutlinedInput label="Tissus spécifiques" />}
-                renderValue={(selected) => selected.join(', ')}
-              >
-                {options.tissuSpecifique.map((tissu) => (
-                  <MenuItem key={tissu} value={tissu}>
-                    <Checkbox checked={filters.tissuSpecifique.indexOf(tissu) > -1} />
-                    <ListItemText primary={tissu} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth>
-              <InputLabel>Détails</InputLabel>
-              <Select
-                multiple
-                value={filters.details}
+              <InputLabel sx={filterInputLabelSx}>Détails</InputLabel>
+              <Select multiple value={filters.details}
                 onChange={(e) => handleChange('details', e.target.value)}
                 input={<OutlinedInput label="Détails" />}
                 renderValue={(selected) => selected.join(', ')}
-              >
+                sx={filterSelectSx}>
                 {options.details.map((detail) => (
                   <MenuItem key={detail} value={detail}>
-                    <Checkbox checked={filters.details.indexOf(detail) > -1} />
+                    <Checkbox checked={filters.details.indexOf(detail) > -1} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
                     <ListItemText primary={detail} />
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-          </Grid>
+          </Box>
 
-          <Grid item xs={12} md={6}>
+          {/* Ligne 4 : Type de tissu | Métrage | Besoin spécifique */}
+          <Box sx={grid3}>
             <FormControl fullWidth>
-              <InputLabel>Tailles</InputLabel>
-              <Select
-                multiple
-                value={filters.taillesDisponibles}
-                onChange={(e) => handleChange('taillesDisponibles', e.target.value)}
-                input={<OutlinedInput label="Tailles" />}
+              <InputLabel sx={filterInputLabelSx}>Type de tissu</InputLabel>
+              <Select multiple value={filters.tissuTypes}
+                onChange={(e) => handleChange('tissuTypes', e.target.value)}
+                input={<OutlinedInput label="Type de tissu" />}
                 renderValue={(selected) => selected.join(', ')}
-              >
-                {options.taillesDisponibles.map((taille) => (
-                  <MenuItem key={taille} value={taille}>
-                    <Checkbox checked={filters.taillesDisponibles.indexOf(taille) > -1} />
-                    <ListItemText primary={taille} />
+                sx={filterSelectSx}>
+                {options.tissuTypes.map((type) => (
+                  <MenuItem key={type} value={type}>
+                    <Checkbox checked={filters.tissuTypes.indexOf(type) > -1} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
+                    <ListItemText primary={type} />
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-          </Grid>
 
-          <Grid item xs={12}>
-            <Typography gutterBottom>Métrage (mètres)</Typography>
-            <Slider
-              value={[filters.metrageMin, filters.metrageMax]}
-              onChange={(e, value) => {
-                handleChange('metrageMin', value[0]);
-                handleChange('metrageMax', value[1]);
-              }}
-              valueLabelDisplay="auto"
-              min={0}
-              max={10}
-              step={0.1}
-              marks={[
-                { value: 0, label: '0m' },
-                { value: 5, label: '5m' },
-                { value: 10, label: '10m' }
-              ]}
-            />
-          </Grid>
-
-          <Grid item xs={12}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={filters.cousu === true}
-                  onChange={(e) => handleChange('cousu', e.target.checked ? true : undefined)}
-                />
-              }
-              label="Déjà cousu uniquement"
-            />
-          </Grid>
-
-          <Grid item xs={12}>
-            <Box display="flex" gap={2}>
-              <Button variant="contained" onClick={handleApplyFilters} fullWidth>
-                Appliquer les filtres
-              </Button>
-              <Button variant="outlined" onClick={handleReset} fullWidth>
-                Réinitialiser
-              </Button>
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+              <ToggleButtonGroup
+                value={filters.metrageRanges}
+                onChange={(e, val) => handleChange('metrageRanges', val)}
+                sx={{ flexWrap: 'wrap', gap: 0.5, justifyContent: 'center' }}
+              >
+                {METRAGE_RANGES.map(r => (
+                  <ToggleButton key={r.value} value={r.value}
+                    sx={{
+                      fontWeight: 700, borderColor: '#a8c8e0', color: '#33658a', borderWidth: 2,
+                      borderRadius: '20px !important',
+                      '&.Mui-selected': { bgcolor: '#33658a', color: '#fff', borderColor: '#33658a', '&:hover': { bgcolor: '#1e4d6b' } },
+                      '&:hover': { bgcolor: '#ffddd2' }
+                    }}>
+                    {r.label}
+                  </ToggleButton>
+                ))}
+              </ToggleButtonGroup>
             </Box>
-          </Grid>
-        </Grid>
+
+            <FormControl fullWidth>
+              <InputLabel sx={filterInputLabelSx}>Besoins spécifiques</InputLabel>
+              <Select multiple value={filters.tissuSpecifique}
+                onChange={(e) => handleChange('tissuSpecifique', e.target.value)}
+                input={<OutlinedInput label="Besoins spécifiques" />}
+                renderValue={(selected) => selected.join(', ')}
+                sx={filterSelectSx}>
+                {options.tissuSpecifique.map((tissu) => (
+                  <MenuItem key={tissu} value={tissu}>
+                    <Checkbox checked={filters.tissuSpecifique.indexOf(tissu) > -1} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
+                    <ListItemText primary={tissu} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+
+          {/* Boutons */}
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button variant="contained" onClick={handleApplyFilters} fullWidth
+              sx={{ fontWeight: 700, background: 'linear-gradient(45deg, #33658a 30%, #0cbaba 90%)', boxShadow: '0 3px 5px 2px rgba(51,101,138,.3)' }}>
+              Appliquer les filtres
+            </Button>
+            <Button variant="outlined" onClick={handleReset} fullWidth
+              sx={{ fontWeight: 700, borderWidth: 2, borderColor: '#33658a', color: '#33658a', '&:hover': { borderWidth: 2, bgcolor: '#ffddd2' } }}>
+              Réinitialiser
+            </Button>
+          </Box>
+
+        </Box>
       </AccordionDetails>
     </Accordion>
   );
