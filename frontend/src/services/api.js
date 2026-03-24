@@ -40,3 +40,25 @@ export const dealerService = {
   update: (id, dealer) => axios.put(`${API_URL}/dealers/${id}`, dealer),
   delete: (id) => axios.delete(`${API_URL}/dealers/${id}`)
 };
+
+export const inspirationService = {
+  getAll: () => axios.get(`${API_URL}/inspirations`),
+  create: (item) => axios.post(`${API_URL}/inspirations`, item),
+  update: (id, item) => axios.put(`${API_URL}/inspirations/${id}`, item),
+  delete: (id) => axios.delete(`${API_URL}/inspirations/${id}`),
+  setImagePosition: (id, imagePosition) => axios.patch(`${API_URL}/inspirations/${id}/imagePosition`, { imagePosition })
+};
+
+export const wishlistService = {
+  getAll: () => axios.get(`${API_URL}/wishlist`),
+  create: (item) => axios.post(`${API_URL}/wishlist`, item),
+  update: (id, item) => axios.put(`${API_URL}/wishlist/${id}`, item),
+  delete: (id) => axios.delete(`${API_URL}/wishlist/${id}`)
+};
+
+export const mensurationsService = {
+  getAll: () => axios.get(`${API_URL}/mensurations`),
+  create: (item) => axios.post(`${API_URL}/mensurations`, item),
+  update: (id, item) => axios.put(`${API_URL}/mensurations/${id}`, item),
+  delete: (id) => axios.delete(`${API_URL}/mensurations/${id}`)
+};

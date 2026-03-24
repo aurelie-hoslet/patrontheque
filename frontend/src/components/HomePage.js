@@ -1,309 +1,215 @@
-import React, { useState, useRef } from 'react';
-import { Box, Typography, Card, CardContent, CardMedia, Chip, IconButton } from '@mui/material';
-import FavoriteIcon from '@mui/icons-material/Favorite';
-import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
-import StraightenIcon from '@mui/icons-material/Straighten';
-import PatronModal from './PatronModal';
-import { patronService } from '../services/api';
+import React from 'react';
+import { Box, Typography } from '@mui/material';
+import {
+  Shirt, Layers, ClipboardList, Images,
+  Store, Sparkles, Bookmark, PersonStanding, ArrowRight, Plus
+} from 'lucide-react';
+import { useSettings, getFontFamily, TITLE_FONT } from '../context/SettingsContext';
 
-const LANGUE_DRAPEAUX = {
-  'Français': { img: 'https://flagcdn.com/20x15/fr.png' },
-  'Anglais':  { img: 'https://flagcdn.com/20x15/gb.png' },
-  'Allemand': { img: 'https://flagcdn.com/20x15/de.png' },
-  'Autre':    { emoji: '🌍' }
-};
+const MODULES = [
+  {
+    label: 'Les Patrons',
+    icon: Shirt,
+    tab: 1,
+    color: '#e36397',
+    bg: 'linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%)',
+    bgDark: 'linear-gradient(135deg, #2a1520 0%, #3a1a28 100%)',
+    emptyLabel: 'Ajouter votre premier patron',
+    countLabel: (n) => `${n} patron${n > 1 ? 's' : ''}`,
+  },
+  {
+    label: 'Les Tissus',
+    icon: Layers,
+    tab: 2,
+    color: '#33658a',
+    bg: 'linear-gradient(135deg, #e3f0f8 0%, #bbdefb 100%)',
+    bgDark: 'linear-gradient(135deg, #0d1f2d 0%, #0d2a3a 100%)',
+    emptyLabel: 'Ajouter votre premier tissu',
+    countLabel: (n) => `${n} tissu${n > 1 ? 'x' : ''}`,
+  },
+  {
+    label: 'Projets',
+    icon: ClipboardList,
+    tab: 3,
+    color: '#0cbaba',
+    bg: 'linear-gradient(135deg, #e0f7f7 0%, #b2ebf2 100%)',
+    bgDark: 'linear-gradient(135deg, #071e1e 0%, #0d2a2a 100%)',
+    emptyLabel: 'Démarrer un projet',
+    countLabel: (n) => `${n} projet${n > 1 ? 's' : ''}`,
+  },
+  {
+    label: 'Galerie',
+    icon: Images,
+    tab: 4,
+    color: '#ff8b60',
+    bg: 'linear-gradient(135deg, #fff0e8 0%, #ffccbc 100%)',
+    bgDark: 'linear-gradient(135deg, #2a1408 0%, #3a1a0a 100%)',
+    emptyLabel: 'Voir la galerie',
+    countLabel: (n) => `${n} réalisation${n > 1 ? 's' : ''}`,
+  },
+  {
+    label: 'Carnet d\'adresses',
+    icon: Store,
+    tab: 5,
+    color: '#7b5ea7',
+    bg: 'linear-gradient(135deg, #ede7f6 0%, #d1c4e9 100%)',
+    bgDark: 'linear-gradient(135deg, #1a0f2a 0%, #231536 100%)',
+    emptyLabel: 'Ajouter un dealer',
+    countLabel: (n) => `${n} dealer${n > 1 ? 's' : ''}`,
+  },
+  {
+    label: 'Inspirations',
+    icon: Sparkles,
+    tab: 6,
+    color: '#e36397',
+    bg: 'linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%)',
+    bgDark: 'linear-gradient(135deg, #2a1520 0%, #3a1a28 100%)',
+    emptyLabel: 'Ajouter des inspirations',
+    countLabel: () => 'Mes inspirations',
+  },
+  {
+    label: 'Wish List',
+    icon: Bookmark,
+    tab: 7,
+    color: '#33658a',
+    bg: 'linear-gradient(135deg, #e3f0f8 0%, #bbdefb 100%)',
+    bgDark: 'linear-gradient(135deg, #0d1f2d 0%, #0d2a3a 100%)',
+    emptyLabel: 'Créer une wish list',
+    countLabel: () => 'Ma wish list',
+  },
+  {
+    label: 'Mensurations',
+    icon: PersonStanding,
+    tab: 8,
+    color: '#e36397',
+    bg: 'linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%)',
+    bgDark: 'linear-gradient(135deg, #2a1520 0%, #3a1a28 100%)',
+    emptyLabel: 'Créer un profil',
+    countLabel: (n) => `${n} profil${n > 1 ? 's' : ''}`,
+  },
+];
 
-function HomePage({ patrons, tissus = [], projets = [], onEdit, onDelete, onBrowse }) {
-  const [selectedPatron, setSelectedPatron] = useState(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [localPatrons, setLocalPatrons] = useState(patrons);
-  const [suggestions, setSuggestions] = useState([]);
-  const suggestionsSet = useRef(false);
+function ModuleCard({ mod, count, onNavigate, isDark }) {
+  const { settings } = useSettings();
+  const font = getFontFamily(settings.font);
+  const Icon = mod.icon;
+  const isEmpty = count === 0;
+  const unknownCount = count === null;
 
-  React.useEffect(() => {
-    setLocalPatrons(patrons);
-    if (!suggestionsSet.current && patrons.length > 0) {
-      const shuffled = [...patrons].sort(() => Math.random() - 0.5);
-      setSuggestions(shuffled.slice(0, 4));
-      suggestionsSet.current = true;
-    }
-  }, [patrons]);
+  return (
+    <Box
+      onClick={() => onNavigate(mod.tab)}
+      sx={{
+        background: isDark ? mod.bgDark : mod.bg,
+        border: `1.5px solid ${mod.color}22`,
+        borderRadius: 3,
+        p: 2.5,
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1.5,
+        position: 'relative',
+        overflow: 'hidden',
+        transition: 'all 0.18s',
+        '&:hover': {
+          transform: 'translateY(-3px)',
+          boxShadow: `0 8px 28px ${mod.color}33`,
+          border: `1.5px solid ${mod.color}66`,
+        },
+      }}
+    >
+      {/* Cercle décoratif en fond */}
+      <Box sx={{
+        position: 'absolute', top: -20, right: -20,
+        width: 80, height: 80, borderRadius: '50%',
+        bgcolor: `${mod.color}15`,
+      }} />
 
-  const toggleFavori = async (patron, e) => {
-    e.stopPropagation();
-    const newValue = !patron.favori;
-    const update = (list) => list.map(p => p._id === patron._id ? { ...p, favori: newValue } : p);
-    setLocalPatrons(prev => update(prev));
-    setSuggestions(prev => update(prev));
-    try {
-      await patronService.setFavori(patron._id, newValue);
-    } catch (error) {
-      const revert = (list) => list.map(p => p._id === patron._id ? { ...p, favori: !newValue } : p);
-      setLocalPatrons(prev => revert(prev));
-      setSuggestions(prev => revert(prev));
-      console.error('Erreur mise à jour Favori:', error);
-    }
-  };
+      {/* Icon */}
+      <Box sx={{
+        width: 44, height: 44, borderRadius: 2,
+        bgcolor: mod.color,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: `0 4px 12px ${mod.color}44`,
+      }}>
+        <Icon size={22} color="white" strokeWidth={2} />
+      </Box>
 
-  const getMetrageRange = (min, max) => {
-    if (!min && !max) return '';
-    if (min && max) return `${min} à ${max}m`;
-    if (min) return `${min}m+`;
-    if (max) return `jusqu'à ${max}m`;
-  };
+      {/* Label */}
+      <Typography sx={{ fontWeight: 800, fontSize: '0.92rem', fontFamily: font, color: 'text.primary', lineHeight: 1.2 }}>
+        {mod.label}
+      </Typography>
 
-  const getTaillesRange = (tailles) => {
-    if (!tailles || tailles.length === 0) return '';
-    if (tailles.length === 1) return tailles[0];
-    return `${tailles[0]} - ${tailles[tailles.length - 1]}`;
+      {/* Stat ou vide */}
+      {unknownCount ? (
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography sx={{ fontSize: '0.8rem', fontWeight: 700, color: mod.color }}>
+            {mod.emptyLabel}
+          </Typography>
+          <ArrowRight size={14} color={mod.color} strokeWidth={2.5} />
+        </Box>
+      ) : isEmpty ? (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: mod.color }}>
+          <Plus size={13} strokeWidth={2.5} />
+          <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: mod.color }}>
+            {mod.emptyLabel}
+          </Typography>
+        </Box>
+      ) : (
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography sx={{ fontSize: '0.8rem', fontWeight: 700, color: mod.color }}>
+            {mod.countLabel(count)}
+          </Typography>
+          <ArrowRight size={14} color={mod.color} strokeWidth={2.5} />
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+
+function HomePage({ patrons, tissus = [], projets = [], dealers = [], onNavigate }) {
+  const { settings } = useSettings();
+  const isDark = settings.mode === 'dark';
+
+  const projetsTermines = projets.filter(p => p.statut === 'Terminé').length;
+
+  const moduleCounts = {
+    1: patrons.length,
+    2: tissus.length,
+    3: projets.length,
+    4: projetsTermines,
+    5: dealers.length,
+    6: null,
+    7: null,
+    8: null,
   };
 
   return (
     <Box>
-      {/* Bandeau de bienvenue */}
-      <Box sx={{
-        background: 'linear-gradient(135deg, #33658a 0%, #0cbaba 100%)',
-        borderRadius: 3,
-        p: { xs: 3, md: 5 },
-        mb: 5,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 3,
-        boxShadow: '0 8px 32px rgba(51,101,138,0.25)',
-        overflow: 'hidden',
-        position: 'relative',
-      }}>
-        {/* Cercles décoratifs */}
-        <Box sx={{ position: 'absolute', top: -40, right: -40, width: 160, height: 160, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.08)' }} />
-        <Box sx={{ position: 'absolute', bottom: -30, right: 80, width: 100, height: 100, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.06)' }} />
 
-        <Box sx={{ position: 'relative', zIndex: 1 }}>
-          <Typography variant="h4" sx={{ color: 'white', fontWeight: 800, mb: 1, textShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
-            Bienvenue dans Sewing Box 🧵
-          </Typography>
-        </Box>
+      {/* ── TITRE PRINCIPAL ── */}
+      <Typography variant="h3" sx={{ mb: 4, fontFamily: TITLE_FONT, color: 'text.primary', lineHeight: 1.3 }}>
+        Dans ma Sewing Box, il y a&nbsp;…
+      </Typography>
+
+      <Box sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr 1fr', sm: '1fr 1fr 1fr', md: 'repeat(4, 1fr)' },
+        gap: 2,
+        mb: 6,
+      }}>
+        {MODULES.map((mod) => (
+          <ModuleCard
+            key={mod.label}
+            mod={mod}
+            count={moduleCounts[mod.tab] ?? 0}
+            onNavigate={onNavigate}
+            isDark={isDark}
+          />
+        ))}
       </Box>
 
-      {/* Fun facts */}
-      {false && (() => {
-        const avecMetrage = patrons.filter(p => p.metrageMin);
-        const totalMetrage = avecMetrage.reduce((sum, p) => sum + p.metrageMin, 0);
-        const jamaiscousu = patrons.filter(p => !p.cousu).length;
-        const pourcentCousu = patrons.length > 0 ? Math.round((patrons.filter(p => p.cousu).length / patrons.length) * 100) : 0;
-        const marqueCounts = patrons.reduce((acc, p) => { if (p.marque) acc[p.marque] = (acc[p.marque] || 0) + 1; return acc; }, {});
-        const marquestar = Object.entries(marqueCounts).sort((a, b) => b[1] - a[1])[0];
-        const typeCounts = patrons.reduce((acc, p) => { (p.types || []).forEach(t => { acc[t] = (acc[t] || 0) + 1; }); return acc; }, {});
-        const typeStar = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0];
-        const stockMetrage = tissus.reduce((sum, t) => sum + (t.quantite || 0), 0);
-        const projetsTermines = projets.filter(p => p.statut === 'Terminé').length;
-        const avecManches = patrons.filter(p => p.manches && p.manches.length > 0 && !p.manches.every(m => m === 'Sans manches')).length;
-
-        const cards = [
-          totalMetrage > 0 && {
-            emoji: '📏',
-            titre: 'Si tu cousais tout...',
-            valeur: `~${totalMetrage} m de tissu`,
-            detail: totalMetrage >= 105
-              ? `soit ${(totalMetrage / 105).toFixed(1)} terrains de foot 🏟️`
-              : `soit ${(totalMetrage / 50).toFixed(1)} longueurs de piscine 🏊`,
-            color: '#33658a',
-          },
-          jamaiscousu > 0 && {
-            emoji: '😴',
-            titre: 'Encore jamais cousus',
-            valeur: `${jamaiscousu} patron${jamaiscousu > 1 ? 's' : ''}`,
-            detail: `${pourcentCousu}% de ta collection a été cousu`,
-            color: '#e36397',
-          },
-          marquestar && {
-            emoji: '🏆',
-            titre: 'Marque star',
-            valeur: marquestar[0],
-            detail: `${marquestar[1]} patron${marquestar[1] > 1 ? 's' : ''} dans ta collection`,
-            color: '#0cbaba',
-          },
-          typeStar && {
-            emoji: '👗',
-            titre: 'Type préféré',
-            valeur: typeStar[0],
-            detail: `${typeStar[1]} patron${typeStar[1] > 1 ? 's' : ''} de ce type`,
-            color: '#e36397',
-          },
-          avecManches > 0 && {
-            emoji: '🧥',
-            titre: 'Avec des manches',
-            valeur: `${avecManches} patron${avecManches > 1 ? 's' : ''}`,
-            detail: `soit ${avecManches * 2} manches à coudre si tout cousu ! ✂️`,
-            color: '#33658a',
-          },
-          stockMetrage > 0 && {
-            emoji: '🧵',
-            titre: 'Tissu en stock',
-            valeur: `${stockMetrage} m`,
-            detail: `dans ${tissus.length} tissu${tissus.length > 1 ? 's' : ''} différent${tissus.length > 1 ? 's' : ''}`,
-            color: '#0cbaba',
-          },
-          projetsTermines > 0 && {
-            emoji: '🎉',
-            titre: 'Projets terminés',
-            valeur: `${projetsTermines} projet${projetsTermines > 1 ? 's' : ''}`,
-            detail: projetsTermines >= 10 ? 'Tu es une machine ! 🚀' : projetsTermines >= 5 ? 'Belle progression ! 👏' : 'C\'est un début ! 💪',
-            color: '#e36397',
-          },
-        ].filter(Boolean);
-
-        if (cards.length === 0) return null;
-        return (
-          <Box sx={{ mb: 4 }}>
-            <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>🎲 Le saviez-vous ?</Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '1fr 1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
-              {cards.map((card, i) => (
-                <Box key={i} sx={{ p: 2.5, bgcolor: '#ffddd2', borderRadius: 2, border: `2px solid ${card.color}20`, textAlign: 'center', borderTop: `4px solid ${card.color}` }}>
-                  <Typography sx={{ fontSize: '2rem', lineHeight: 1, mb: 0.5 }}>{card.emoji}</Typography>
-                  <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', mb: 0.5 }}>{card.titre}</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800, color: card.color, fontSize: '1.1rem', lineHeight: 1.2, mb: 0.5 }}>{card.valeur}</Typography>
-                  <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{card.detail}</Typography>
-                </Box>
-              ))}
-            </Box>
-          </Box>
-        );
-      })()}
-
-      {/* Section Suggestions */}
-
-      {suggestions.length === 0 ? (
-        <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
-          <Typography variant="body1">Chargement des suggestions...</Typography>
-        </Box>
-      ) : (
-        <>
-          <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
-            ✨ Suggestions du jour
-          </Typography>
-          <Box sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr 1fr' },
-            gap: 3
-          }}>
-            {suggestions.map((patron) => (
-              <Card
-                key={patron._id}
-                onClick={() => { setSelectedPatron(patron); setModalOpen(true); }}
-                sx={{
-                  cursor: 'pointer',
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  overflow: 'hidden',
-                  bgcolor: '#ffddd2',
-                  border: patron.complet ? '2px solid #0cbaba' : '2px solid transparent',
-                  '&:hover': { boxShadow: 6, bgcolor: '#e85d75', color: 'white' }
-                }}
-              >
-                <Box sx={{ height: 200, width: '100%', overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
-                  {patron.imagePrincipale ? (
-                    <CardMedia
-                      component="img"
-                      image={patron.imagePrincipale}
-                      alt={patron.modele}
-                      sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                    />
-                  ) : (
-                    <Box sx={{ width: '100%', height: '100%', bgcolor: 'grey.100', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Typography variant="body2" color="text.disabled">Pas d'image</Typography>
-                    </Box>
-                  )}
-                  {patron.complet && (
-                    <Box sx={{
-                      position: 'absolute', top: 8, right: 8,
-                      bgcolor: '#0cbaba', color: 'white',
-                      borderRadius: '12px', px: 1.5, py: 0.5,
-                      fontSize: '0.75rem', fontWeight: 700, boxShadow: 2
-                    }}>
-                      ✓ Complet
-                    </Box>
-                  )}
-                  <IconButton
-                    onClick={e => toggleFavori(patron, e)}
-                    size="small"
-                    sx={{
-                      position: 'absolute', top: 4, left: 4,
-                      bgcolor: 'rgba(255,255,255,0.85)',
-                      '&:hover': { bgcolor: 'rgba(255,255,255,1)' },
-                      p: 0.5
-                    }}
-                  >
-                    {patron.favori
-                      ? <FavoriteIcon sx={{ color: '#e85d75', fontSize: '1.3rem' }} />
-                      : <FavoriteBorderIcon sx={{ color: '#e85d75', fontSize: '1.3rem' }} />
-                    }
-                  </IconButton>
-                </Box>
-
-                <CardContent sx={{ flexGrow: 1 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.25 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', fontSize: '0.75rem' }}>
-                      {patron.marque}
-                    </Typography>
-                    <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                      {patron.langues?.map(lang => {
-                        const flag = LANGUE_DRAPEAUX[lang];
-                        if (!flag) return null;
-                        return flag.img
-                          ? <img key={lang} src={flag.img} alt={lang} title={lang} style={{ height: '15px', verticalAlign: 'middle', borderRadius: '2px' }} />
-                          : <span key={lang} title={lang} style={{ fontSize: '1.1rem', lineHeight: 1 }}>{flag.emoji}</span>;
-                      })}
-                    </Box>
-                  </Box>
-
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.25 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 800, fontSize: '1.15rem', lineHeight: 1.2 }}>
-                      {patron.modele}
-                    </Typography>
-                    {patron.cousu && (
-                      <Chip label="✂️" size="small" sx={{ bgcolor: '#e36397', color: 'white' }} title="Déjà cousu" />
-                    )}
-                  </Box>
-
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                      {patron.tissuTypes?.includes('Chaîne et trame') && <Chip label="Chaîne et trame" size="small" color="primary" />}
-                      {patron.tissuTypes?.includes('Maille') && <Chip label="Maille" size="small" sx={{ bgcolor: '#0cbaba', color: 'white' }} />}
-                    </Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'right' }}>
-                      {getTaillesRange(patron.taillesDisponibles) || getTaillesRange(patron.taillesEnfant) || patron.dimensions || ''}
-                    </Typography>
-                  </Box>
-
-                  {(patron.metrageMin || patron.metrageMax) && (
-                    <Box sx={{ mb: 1, display: 'flex', justifyContent: 'center' }}>
-                      <Chip
-                        icon={<StraightenIcon sx={{ color: 'white !important' }} />}
-                        label={getMetrageRange(patron.metrageMin, patron.metrageMax)}
-                        size="small"
-                        sx={{ fontSize: '0.75rem', bgcolor: '#33658a', color: 'white', width: '100%', justifyContent: 'center' }}
-                      />
-                    </Box>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </Box>
-        </>
-      )}
-
-      {selectedPatron && (
-        <PatronModal
-          open={modalOpen}
-          patron={selectedPatron}
-          onClose={() => { setModalOpen(false); setSelectedPatron(null); }}
-          onEdit={onEdit}
-          onDelete={() => { onDelete(); setModalOpen(false); setSelectedPatron(null); }}
-        />
-      )}
     </Box>
   );
 }

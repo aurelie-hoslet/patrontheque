@@ -5,7 +5,7 @@ import {
   OutlinedInput, Checkbox, ListItemText, Button,
   FormControlLabel, ToggleButton, ToggleButtonGroup, Box
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { ChevronDown, SlidersHorizontal, Scissors } from 'lucide-react';
 import { patronService } from '../services/api';
 
 const FILTRES_ACTIFS = true;
@@ -27,22 +27,22 @@ const METRAGE_RANGES = [
 ];
 
 const filterSelectSx = {
-  '& .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: '#a8c8e0', transition: 'border-color 0.2s' },
+  '& .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: '#e8e3dd', transition: 'border-color 0.2s' },
   '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a' },
   '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a', borderWidth: 2 },
   minHeight: 56,
 };
 
 const filterInputLabelSx = {
-  fontWeight: 600, color: '#33658a',
+  fontWeight: 600, color: '#6b6158',
   '&.Mui-focused': { color: '#33658a' }
 };
 
 const filterFieldSx = {
-  '& .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: '#a8c8e0', transition: 'border-color 0.2s' },
+  '& .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: '#e8e3dd', transition: 'border-color 0.2s' },
   '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a' },
   '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a', borderWidth: 2 },
-  '& .MuiInputLabel-root': { fontWeight: 600, color: '#33658a' },
+  '& .MuiInputLabel-root': { fontWeight: 600, color: '#6b6158' },
   '& .MuiInputLabel-root.Mui-focused': { color: '#33658a' },
 };
 
@@ -91,7 +91,7 @@ function PatronFilters({ onFilter }) {
 
   useEffect(() => {
     if (FILTRES_ACTIFS) onFilter(buildBackendFilters(filters));
-  }, [filters]);
+  }, [filters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadOptions = async () => {
     try {
@@ -161,15 +161,38 @@ function PatronFilters({ onFilter }) {
     onFilter(resetFilters);
   };
 
+  const hasActiveFilters = filters.searchText || filters.langues.length > 0 || filters.genres.length > 0
+    || filters.types.length > 0 || filters.typeAccessoires.length > 0 || filters.manches.length > 0
+    || filters.longueurs.length > 0 || filters.tissuTypes.length > 0 || filters.tissuSpecifique.length > 0
+    || filters.details.length > 0 || filters.taillesDisponibles.length > 0 || filters.taillesEnfant.length > 0
+    || filters.metrageRanges.length > 0 || filters.cousu;
+
   const grid3 = { display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 };
 
   return (
-    <Accordion sx={{ bgcolor: '#ffddd2', borderRadius: '8px !important', boxShadow: '0 4px 16px rgba(51,101,138,0.12)', mb: 2 }}>
-      <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: '#33658a' }} />}
-        sx={{ bgcolor: '#ffddd2', borderRadius: '8px', '&.Mui-expanded': { borderBottom: '2px solid #a8c8e0' } }}>
-        <Typography variant="h6" sx={{ color: '#1e4d6b', fontWeight: 700 }}>🔍 Filtres</Typography>
+    <Accordion
+      sx={{
+        bgcolor: 'background.paper',
+        borderRadius: '12px !important',
+        border: hasActiveFilters ? '1.5px solid #33658a' : '1.5px solid rgba(26,19,10,0.07)',
+        boxShadow: '0 2px 8px rgba(26,19,10,0.06)',
+        mb: 2,
+        '&:before': { display: 'none' }
+      }}
+    >
+      <AccordionSummary
+        expandIcon={<ChevronDown size={20} color="#33658a" />}
+        sx={{ borderRadius: '12px', '&.Mui-expanded': { borderBottom: '1.5px solid rgba(26,19,10,0.07)' } }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <SlidersHorizontal size={18} color="#33658a" strokeWidth={2} />
+          <Typography variant="subtitle1" sx={{ color: '#33658a', fontWeight: 700 }}>Filtres</Typography>
+          {hasActiveFilters && (
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#e36397' }} />
+          )}
+        </Box>
       </AccordionSummary>
-      <AccordionDetails>
+      <AccordionDetails sx={{ pt: 2 }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
 
           {/* Ligne 1 : Recherche | Déjà cousu | Langue */}
@@ -190,7 +213,12 @@ function PatronFilters({ onFilter }) {
                     sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }}
                   />
                 }
-                label={<span style={{ fontWeight: 600, color: '#33658a' }}>✂️ Déjà cousu uniquement</span>}
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    <Scissors size={14} color="#33658a" strokeWidth={2} />
+                    <span style={{ fontWeight: 600, color: '#33658a', fontSize: '0.88rem' }}>Déjà cousu</span>
+                  </Box>
+                }
               />
             </Box>
             <FormControl fullWidth>
@@ -375,10 +403,10 @@ function PatronFilters({ onFilter }) {
                 {METRAGE_RANGES.map(r => (
                   <ToggleButton key={r.value} value={r.value}
                     sx={{
-                      fontWeight: 700, borderColor: '#a8c8e0', color: '#33658a', borderWidth: 2,
+                      fontWeight: 700, borderColor: '#e8e3dd', color: '#33658a', borderWidth: 2,
                       borderRadius: '20px !important',
                       '&.Mui-selected': { bgcolor: '#33658a', color: '#fff', borderColor: '#33658a', '&:hover': { bgcolor: '#1e4d6b' } },
-                      '&:hover': { bgcolor: '#ffddd2' }
+                      '&:hover': { bgcolor: '#f7f3ee' }
                     }}>
                     {r.label}
                   </ToggleButton>
@@ -406,11 +434,11 @@ function PatronFilters({ onFilter }) {
           {/* Boutons */}
           <Box sx={{ display: 'flex', gap: 2 }}>
             <Button variant="contained" onClick={handleApplyFilters} fullWidth
-              sx={{ fontWeight: 700, background: 'linear-gradient(45deg, #33658a 30%, #0cbaba 90%)', boxShadow: '0 3px 5px 2px rgba(51,101,138,.3)' }}>
+              sx={{ fontWeight: 700, bgcolor: '#33658a', '&:hover': { bgcolor: '#1e4d6b' }, borderRadius: 2 }}>
               Appliquer les filtres
             </Button>
             <Button variant="outlined" onClick={handleReset} fullWidth
-              sx={{ fontWeight: 700, borderWidth: 2, borderColor: '#33658a', color: '#33658a', '&:hover': { borderWidth: 2, bgcolor: '#ffddd2' } }}>
+              sx={{ fontWeight: 700, borderWidth: 2, borderColor: '#33658a', color: '#33658a', borderRadius: 2, '&:hover': { borderWidth: 2, bgcolor: '#f0f6fb' } }}>
               Réinitialiser
             </Button>
           </Box>

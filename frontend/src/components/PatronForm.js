@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Box, TextField, Button, Grid, FormControl, InputLabel, Select,
+  Box, TextField, Button, FormControl, InputLabel, Select,
   MenuItem, OutlinedInput, Checkbox, ListItemText, Typography,
-  Paper, Chip, FormControlLabel, Autocomplete, InputAdornment, IconButton
+  Paper, Chip, FormControlLabel, Autocomplete, InputAdornment, IconButton,
+  Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
-import LightbulbIcon from '@mui/icons-material/Lightbulb';
-import DeleteIcon from '@mui/icons-material/Delete';
-import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
-import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline';
+import {
+  Info, Ruler, Image, FileText, Lightbulb, Trash2,
+  Pencil, Scissors, Check, ClipboardCopy, Clock, Camera, BarChart2, X
+} from 'lucide-react';
 import { patronService } from '../services/api';
 
 const GENRES = ['Femme', 'Homme', 'Enfant', 'Bébé', 'Unisexe', 'Accessoire'];
-const TYPES = ['Blouse', 'Body', 'Boxer', 'Chemise', 'Chemisier', 'Combi', 'Culotte',
+const TYPES = ['Anorak', 'Blouse', 'Blouson', 'Body', 'Boxer', 'Brassière', 'Chemise', 'Chemisier', 'Combi', 'Culotte',
   'Débardeur', 'Gilet', 'Jean', 'Jupe', 'Jupe-Culotte', 'Legging', 'Maillot De Bain',
   'Manteau', 'Marinière', 'Nuit', 'Pantalon', 'Paréo', 'Peignoir', 'Polo', 'Pull',
   'Robe', 'Salopette', 'Short', 'Soutien-Gorge', 'Sweat', 'Sweat Zippé', 'Tee-Shirt',
@@ -30,26 +31,138 @@ const TYPES_AVEC_MANCHES = [
 ];
 const TYPES_AVEC_LONGUEUR = ['Robe', 'Jupe', 'Combi', 'Salopette'];
 const FORMATS = [
-  { key: 'projecteur', label: '📽️ Projecteur' },
-  { key: 'a4', label: '📄 A4' },
-  { key: 'a0', label: '📋 A0' },
+  { key: 'projecteur', label: 'Projecteur' },
+  { key: 'a4', label: 'A4' },
+  { key: 'a0', label: 'A0' },
 ];
 
 const PDF_TYPES = [
-  { key: 'Instructions',      label: 'Instructions',      emoji: '📋' },
-  { key: 'Patron-Projecteur', label: 'Patron Projecteur', emoji: '📽️' },
-  { key: 'Patron-A4',         label: 'Patron A4',         emoji: '📄' },
-  { key: 'Patron-A3',         label: 'Patron A3',         emoji: '📃' },
-  { key: 'Patron-A0',         label: 'Patron A0',         emoji: '🖨️' },
-  { key: 'Patron-US-Letter',  label: 'US Letter',         emoji: '🇺🇸' },
-  { key: 'Misses-A4',         label: 'Misses A4',         emoji: '📄' },
-  { key: 'Misses-A0',         label: 'Misses A0',         emoji: '🖨️' },
-  { key: 'Curvy-A4',          label: 'Curvy A4',          emoji: '📄' },
-  { key: 'Curvy-A0',          label: 'Curvy A0',          emoji: '🖨️' },
-  { key: 'Instructions+Patron-A4', label: 'Instructions+Patron A4', emoji: '📋' },
-  { key: 'Add-on',            label: 'Add-on',            emoji: '➕' },
-  { key: 'Notes',             label: 'Notes',             emoji: '📝' },
+  { key: 'Instructions',           label: 'Instructions' },
+  { key: 'Patron-Projecteur',      label: 'Patron Projecteur' },
+  { key: 'Patron-A4',              label: 'Patron A4' },
+  { key: 'Patron-A3',              label: 'Patron A3' },
+  { key: 'Patron-A0',              label: 'Patron A0' },
+  { key: 'Patron-US-Letter',       label: 'US Letter' },
+  { key: 'Misses-A4',              label: 'Misses A4' },
+  { key: 'Misses-A0',              label: 'Misses A0' },
+  { key: 'Curvy-A4',               label: 'Curvy A4' },
+  { key: 'Curvy-A0',               label: 'Curvy A0' },
+  { key: 'Instructions+Patron-A4', label: 'Instructions+Patron A4' },
+  { key: 'Add-on',                 label: 'Add-on' },
+  { key: 'Notes',                  label: 'Notes' },
 ];
+
+const compressImage = (dataUrl) => new Promise((resolve) => {
+  const img = new window.Image();
+  img.onload = () => {
+    const MAX = 1200;
+    let { width, height } = img;
+    if (width > MAX || height > MAX) {
+      if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+      else { width = Math.round(width * MAX / height); height = MAX; }
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+    resolve(canvas.toDataURL('image/jpeg', 0.82));
+  };
+  img.src = dataUrl;
+});
+
+function ImageField({ label, icon: Icon, value, onChange, onPaste, dashed }) {
+  const [dragging, setDragging] = useState(false);
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'));
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const compressed = await compressImage(reader.result);
+      onChange(compressed);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <Box
+      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragging(false); }}
+      onDrop={handleDrop}
+      sx={{
+        border: dragging
+          ? '2px solid #0cbaba'
+          : value
+            ? '2px solid rgba(12,186,186,0.4)'
+            : `2px ${dashed ? 'dashed' : 'solid'} rgba(12,186,186,0.25)`,
+        borderRadius: 3, p: 2.5,
+        bgcolor: dragging ? 'rgba(12,186,186,0.12)' : 'rgba(12,186,186,0.04)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 2,
+        transition: 'all 0.15s',
+        '&:hover': { borderColor: '#0cbaba' },
+      }}
+    >
+      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#0cbaba', display: 'flex', alignItems: 'center', gap: 0.75 }}>
+        <Icon size={16} strokeWidth={2} />{label}
+      </Typography>
+      {!value && (
+        <Typography variant="caption" sx={{ color: 'text.secondary', mt: -1 }}>
+          Glisser une image ici
+        </Typography>
+      )}
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <Button variant="outlined" size="small" onClick={onPaste}
+          sx={{ borderColor: '#0cbaba', color: '#0cbaba', fontWeight: 700, borderWidth: 2 }}>
+          Coller
+        </Button>
+        {value && (
+          <Button variant="outlined" size="small" onClick={() => onChange('')}
+            sx={{ borderColor: 'rgba(0,0,0,0.15)', color: 'text.secondary', fontWeight: 700, borderWidth: 2 }}>
+            Supprimer
+          </Button>
+        )}
+      </Box>
+      {value && (
+        <img src={value} alt={label} style={{ maxWidth: '100%', borderRadius: 8, display: 'block' }} />
+      )}
+    </Box>
+  );
+}
+
+function HoverSelect({ children, MenuProps: menuPropsProp, ...props }) {
+  const [open, setOpen] = useState(false);
+  const closeTimer = useRef(null);
+
+  const handleEnter = () => {
+    clearTimeout(closeTimer.current);
+    setOpen(true);
+  };
+  const handleLeave = () => {
+    closeTimer.current = setTimeout(() => setOpen(false), 100);
+  };
+
+  return (
+    <Box sx={{ width: '100%' }} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
+      <Select
+        {...props}
+        open={open}
+        onOpen={() => setOpen(true)}
+        onClose={() => setOpen(false)}
+        MenuProps={{
+          ...menuPropsProp,
+          PaperProps: {
+            ...menuPropsProp?.PaperProps,
+            onMouseEnter: handleEnter,
+            onMouseLeave: handleLeave,
+          },
+        }}
+      >
+        {children}
+      </Select>
+    </Box>
+  );
+}
 
 function PatronForm({ patron, onSave, onCancel, onDelete }) {
   const [formData, setFormData] = useState({
@@ -83,7 +196,16 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
     imageSchemaTechnique: '',
     imageSupp1: '',
     imageSupp2: '',
-    imageSupp3: ''
+    imageSupp3: '',
+    typePatron: 'PDF',
+    nomMagazine: '',
+    numeroParution: '',
+    pages: '',
+    titreLivre: '',
+    auteur: '',
+    recopie: false,
+    vintage: false,
+    typePlanche: '',
   });
 
   const [tissuInput, setTissuInput] = useState('');
@@ -95,6 +217,8 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
   const [editingNameIds, setEditingNameIds] = useState(new Set());
   const pdfInputRef = useRef(null);
   const [options, setOptions] = useState({ marques: [], typeAccessoires: [], tissuSpecifique: [], details: [] });
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmPdfDeleteInfo, setConfirmPdfDeleteInfo] = useState(null);
 
   useEffect(() => {
     if (patron) {
@@ -106,7 +230,16 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
         dimensions: patron.dimensions || '',
         metrageMin: patron.metrageMin || '',
         metrageMax: patron.metrageMax || '',
-        typeAccessoires: patron.typeAccessoires?.length > 0 ? patron.typeAccessoires : (patron.typeAccessoire ? [patron.typeAccessoire] : [])
+        typeAccessoires: patron.typeAccessoires?.length > 0 ? patron.typeAccessoires : (patron.typeAccessoire ? [patron.typeAccessoire] : []),
+      typePatron: patron.typePatron || 'PDF',
+      nomMagazine: patron.nomMagazine || '',
+      numeroParution: patron.numeroParution || '',
+      pages: patron.pages || '',
+      titreLivre: patron.titreLivre || '',
+      auteur: patron.auteur || '',
+      recopie: patron.recopie || false,
+      vintage: patron.vintage || false,
+      typePlanche: patron.typePlanche || '',
       });
       if (patron.pdfPath) {
         patronService.getPdfs(patron._id)
@@ -170,8 +303,9 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
           if (type.startsWith('image/')) {
             const blob = await item.getType(type);
             const reader = new FileReader();
-            reader.onloadend = () => {
-              handleChange(field, reader.result);
+            reader.onloadend = async () => {
+              const compressed = await compressImage(reader.result);
+              handleChange(field, compressed);
             };
             reader.readAsDataURL(blob);
             return;
@@ -202,8 +336,19 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
         return { name: finalName + '.pdf', data: p.data };
       });
 
+      const imageFields = ['imagePrincipale', 'imageTableauTailles', 'imageSchemaTechnique', 'imageSupp1', 'imageSupp2', 'imageSupp3'];
+      const compressedImages = {};
+      for (const f of imageFields) {
+        if (formData[f] && formData[f].startsWith('data:')) {
+          compressedImages[f] = await compressImage(formData[f]);
+        }
+      }
+
       const payload = {
         ...formData,
+        ...compressedImages,
+        metrageMin: formData.metrageMin !== '' ? Number(formData.metrageMin) : undefined,
+        metrageMax: formData.metrageMax !== '' ? Number(formData.metrageMax) : undefined,
         pdfFiles: resolvedPdfs.length > 0 ? resolvedPdfs : undefined
       };
       if (patron) {
@@ -214,7 +359,8 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
       onSave();
     } catch (error) {
       console.error('Erreur sauvegarde:', error);
-      alert('Erreur lors de la sauvegarde');
+      const msg = error.response?.data?.message || error.message || 'Erreur inconnue';
+      alert(`Erreur lors de la sauvegarde : ${msg}`);
     }
   };
 
@@ -226,7 +372,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
   const isBebe = formData.genres.includes('Bébé');
   const isAdulte = formData.genres.some(g => ['Femme', 'Homme', 'Unisexe'].includes(g));
 
-  const SectionTitle = ({ children, emoji, color, centered }) => (
+  const SectionTitle = ({ children, icon: Icon, color, centered }) => (
     <Typography
       variant="h5"
       sx={{
@@ -239,75 +385,75 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: centered ? 'center' : 'flex-start',
-        gap: 1
+        gap: 1.5
       }}
     >
-      <span style={{ fontSize: '1.5em' }}>{emoji}</span>
+      {Icon && <Icon size={22} color={color} strokeWidth={2.5} />}
       {children}
     </Typography>
   );
 
   // BLOC 1 – TextField & Autocomplete renderInput
   const roseFieldSx = {
-    '& .MuiOutlinedInput-notchedOutline': { borderWidth: 3, borderColor: '#ffddd2', transition: 'border-color 0.2s' },
+    '& .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: '#e8e3dd', transition: 'border-color 0.2s' },
     '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#e85d75' },
-    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#e36397', borderWidth: 3 },
-    '& .MuiInputLabel-root': { fontWeight: 700, color: '#e36397', fontSize: '1.1rem' },
+    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#e36397', borderWidth: 2 },
+    '& .MuiInputLabel-root': { fontWeight: 700, color: '#e36397' },
     '& .MuiInputLabel-root.Mui-focused': { color: '#e36397' },
     '& .MuiFormHelperText-root': { color: '#9e9e9e' },
   };
 
-  // BLOC 1 – Select (le label est un InputLabel séparé, pas un enfant du Select)
+  // BLOC 1 – Select
   const roseSelectSx = {
-    '& .MuiOutlinedInput-notchedOutline': { borderWidth: 3, borderColor: '#ffddd2', transition: 'border-color 0.2s' },
+    '& .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: '#e8e3dd', transition: 'border-color 0.2s' },
     '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#e85d75' },
-    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#e36397', borderWidth: 3 },
+    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#e36397', borderWidth: 2 },
     minHeight: 56, minWidth: 200
   };
 
-  // BLOC 1 – InputLabel (commun à tous les Select du bloc rose)
+  // BLOC 1 – InputLabel
   const roseInputLabelSx = {
-    fontWeight: 700, color: '#e36397', fontSize: '1.1rem',
+    fontWeight: 700, color: '#e36397',
     '&.Mui-focused': { color: '#e36397' }
   };
 
   // BLOC 2 – TextField
   const bleuFieldSx = {
-    '& .MuiOutlinedInput-notchedOutline': { borderWidth: 3, borderColor: '#a8c8e0', transition: 'border-color 0.2s' },
+    '& .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: '#e8e3dd', transition: 'border-color 0.2s' },
     '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a' },
-    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a', borderWidth: 3 },
-    '& .MuiInputLabel-root': { fontWeight: 700, color: '#33658a', fontSize: '1.1rem' },
+    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a', borderWidth: 2 },
+    '& .MuiInputLabel-root': { fontWeight: 700, color: '#33658a' },
     '& .MuiInputLabel-root.Mui-focused': { color: '#33658a' },
     '& .MuiFormHelperText-root': { color: '#9e9e9e' },
   };
 
   // BLOC 2 – Select
   const bleuSelectSx = {
-    '& .MuiOutlinedInput-notchedOutline': { borderWidth: 3, borderColor: '#a8c8e0', transition: 'border-color 0.2s' },
+    '& .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: '#e8e3dd', transition: 'border-color 0.2s' },
     '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a' },
-    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a', borderWidth: 3 },
+    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a', borderWidth: 2 },
     minHeight: 56, minWidth: 200
   };
 
   // BLOC 2 – InputLabel
   const bleuInputLabelSx = {
-    fontWeight: 700, color: '#33658a', fontSize: '1.1rem',
+    fontWeight: 700, color: '#33658a',
     '&.Mui-focused': { color: '#33658a' }
   };
 
   return (
     <Paper
-      elevation={3}
-      sx={{ p: 4, background: 'linear-gradient(135deg, #fffcfa 0%, #fff5f0 100%)' }}
+      elevation={0}
+      sx={{ p: 4, bgcolor: 'white' }}
       onKeyDown={(e) => { if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') e.preventDefault(); }}
     >
       <Typography variant="h4" gutterBottom sx={{ fontWeight: 900, textAlign: 'center', mb: 4, fontSize: '2.5rem' }}>
-        {patron ? '✨ Modifier un patron ✨' : '🦄 Ajouter un patron 🦄'}
+        {patron ? 'Modifier un patron' : 'Ajouter un patron'}
       </Typography>
 
       {/* ── BLOC 1 : INFORMATIONS DU PATRON (ROSE) ── */}
-      <Box sx={{ p: 3, mb: 4, borderRadius: 3, border: '3px solid #ffddd2', background: '#fff5f0' }}>
-        <SectionTitle emoji="📝" color="#e36397">Informations du patron</SectionTitle>
+      <Box sx={{ p: 3, mb: 4, borderRadius: 3, border: '2px solid rgba(227,99,151,0.2)', background: 'rgba(227,99,151,0.03)' }}>
+        <SectionTitle icon={Info} color="#e36397">Informations du patron</SectionTitle>
 
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3 }}>
 
@@ -317,10 +463,9 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
               freeSolo
               options={options.marques}
               value={formData.marque}
+              inputValue={formData.marque}
               onChange={(_, newValue) => handleChange('marque', newValue || '')}
-              onInputChange={(_, newValue, reason) => {
-                if (reason === 'input') handleChange('marque', newValue);
-              }}
+              onInputChange={(_, newValue) => handleChange('marque', newValue)}
               slotProps={{
                 listbox: { style: { maxHeight: '400px', fontSize: '1.05rem' } }
               }}
@@ -344,7 +489,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
           <Box>
             <FormControl fullWidth required>
               <InputLabel sx={roseInputLabelSx}>Genres</InputLabel>
-              <Select
+              <HoverSelect
                 multiple value={formData.genres}
                 onChange={(e) => handleChange('genres', e.target.value)}
                 input={<OutlinedInput label="Genres" />}
@@ -361,7 +506,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
                     <ListItemText primary={genre} sx={{ '& .MuiTypography-root': { fontWeight: 600, fontSize: '1.05rem' } }} />
                   </MenuItem>
                 ))}
-              </Select>
+              </HoverSelect>
             </FormControl>
           </Box>
 
@@ -370,7 +515,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
             {!isAccessoire ? (
               <FormControl fullWidth>
                 <InputLabel sx={roseInputLabelSx}>Types de vêtement</InputLabel>
-                <Select
+                <HoverSelect
                   multiple value={formData.types}
                   onChange={(e) => handleChange('types', e.target.value)}
                   input={<OutlinedInput label="Types de vêtement" />}
@@ -387,7 +532,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
                       <ListItemText primary={type} sx={{ '& .MuiTypography-root': { fontWeight: 600 } }} />
                     </MenuItem>
                   ))}
-                </Select>
+                </HoverSelect>
               </FormControl>
             ) : (
               <Box>
@@ -419,7 +564,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
             <Box>
               <FormControl fullWidth>
                 <InputLabel sx={roseInputLabelSx}>Manches</InputLabel>
-                <Select
+                <HoverSelect
                   multiple value={formData.manches}
                   onChange={(e) => handleChange('manches', e.target.value)}
                   input={<OutlinedInput label="Manches" />}
@@ -436,7 +581,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
                       <ListItemText primary={manche} sx={{ '& .MuiTypography-root': { fontWeight: 600 } }} />
                     </MenuItem>
                   ))}
-                </Select>
+                </HoverSelect>
               </FormControl>
             </Box>
           )}
@@ -446,7 +591,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
             <Box>
               <FormControl fullWidth>
                 <InputLabel sx={roseInputLabelSx}>Longueur</InputLabel>
-                <Select
+                <HoverSelect
                   multiple value={formData.longueurs}
                   onChange={(e) => handleChange('longueurs', e.target.value)}
                   input={<OutlinedInput label="Longueur" />}
@@ -463,7 +608,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
                       <ListItemText primary={longueur} sx={{ '& .MuiTypography-root': { fontWeight: 600 } }} />
                     </MenuItem>
                   ))}
-                </Select>
+                </HoverSelect>
               </FormControl>
             </Box>
           )}
@@ -472,7 +617,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
           <Box>
             <FormControl fullWidth>
               <InputLabel sx={roseInputLabelSx}>Type de tissu</InputLabel>
-              <Select
+              <HoverSelect
                 multiple value={formData.tissuTypes}
                 onChange={(e) => handleChange('tissuTypes', e.target.value)}
                 input={<OutlinedInput label="Type de tissu" />}
@@ -489,7 +634,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
                     <ListItemText primary={type} sx={{ '& .MuiTypography-root': { fontWeight: 600 } }} />
                   </MenuItem>
                 ))}
-              </Select>
+              </HoverSelect>
             </FormControl>
           </Box>
 
@@ -563,66 +708,162 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
       </Box>
 
       {/* ── BLOC 2 : TAILLES & INFOS PRATIQUES (BLEU) ── */}
-      <Box sx={{ p: 3, mb: 4, borderRadius: 3, border: '3px solid #a8c8e0', background: '#e8f2f8' }}>
-        <SectionTitle emoji="📏" color="#33658a">Tailles & Infos pratiques</SectionTitle>
+      <Box sx={{ p: 3, mb: 4, borderRadius: 3, border: '2px solid rgba(51,101,138,0.2)', background: 'rgba(51,101,138,0.03)' }}>
+        <SectionTitle icon={Ruler} color="#33658a">Tailles & Infos pratiques</SectionTitle>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
 
-          {/* ── LIGNE 1 : Formats disponibles | Langue ── */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3, maxWidth: { sm: '66%' } }}>
+          {/* ── Type de patron ── */}
+          <Box sx={{ maxWidth: 280 }}>
             <FormControl fullWidth>
-              <InputLabel sx={bleuInputLabelSx}>Formats disponibles</InputLabel>
-              <Select
-                multiple
-                value={FORMATS.filter(f => formData.formats[f.key]).map(f => f.key)}
-                onChange={(e) => handleChange('formats', {
-                  projecteur: e.target.value.includes('projecteur'),
-                  a4: e.target.value.includes('a4'),
-                  a0: e.target.value.includes('a0'),
-                })}
-                input={<OutlinedInput label="Formats disponibles" />}
-                renderValue={(selected) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((key) => {
-                      const f = FORMATS.find(o => o.key === key);
-                      return <Chip key={key} label={f?.label} sx={{ bgcolor: '#c8ebeb', fontWeight: 700 }} />;
-                    })}
-                  </Box>
-                )}
+              <InputLabel sx={bleuInputLabelSx}>Type de patron</InputLabel>
+              <HoverSelect
+                value={formData.typePatron}
+                onChange={(e) => handleChange('typePatron', e.target.value)}
+                input={<OutlinedInput label="Type de patron" />}
                 sx={bleuSelectSx}
               >
-                {FORMATS.map((f) => (
-                  <MenuItem key={f.key} value={f.key}>
-                    <Checkbox checked={formData.formats[f.key]} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
-                    <ListItemText primary={f.label} sx={{ '& .MuiTypography-root': { fontWeight: 600, color: '#33658a' } }} />
-                  </MenuItem>
+                {['PDF', 'Magazine', 'Pochette', 'Livre'].map(t => (
+                  <MenuItem key={t} value={t} sx={{ fontWeight: 600 }}>{t}</MenuItem>
                 ))}
-              </Select>
-            </FormControl>
-
-            <FormControl fullWidth>
-              <InputLabel sx={bleuInputLabelSx}>Langue</InputLabel>
-              <Select
-                multiple
-                value={formData.langues}
-                onChange={(e) => handleChange('langues', e.target.value)}
-                input={<OutlinedInput label="Langue" />}
-                renderValue={(selected) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((v) => <Chip key={v} label={v} sx={{ bgcolor: '#c8ebeb', fontWeight: 700 }} />)}
-                  </Box>
-                )}
-                sx={bleuSelectSx}
-              >
-                {LANGUES.map((lang) => (
-                  <MenuItem key={lang} value={lang}>
-                    <Checkbox checked={formData.langues.includes(lang)} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
-                    <ListItemText primary={lang} sx={{ '& .MuiTypography-root': { fontWeight: 600, color: '#33658a' } }} />
-                  </MenuItem>
-                ))}
-              </Select>
+              </HoverSelect>
             </FormControl>
           </Box>
+
+          {/* ── PDF / Pochette : Formats disponibles + Langue ── */}
+          {(formData.typePatron === 'PDF' || formData.typePatron === 'Pochette') && (
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3, maxWidth: { sm: '66%' } }}>
+              <FormControl fullWidth>
+                <InputLabel sx={bleuInputLabelSx}>Formats disponibles</InputLabel>
+                <HoverSelect
+                  multiple
+                  value={FORMATS.filter(f => formData.formats[f.key]).map(f => f.key)}
+                  onChange={(e) => handleChange('formats', {
+                    projecteur: e.target.value.includes('projecteur'),
+                    a4: e.target.value.includes('a4'),
+                    a0: e.target.value.includes('a0'),
+                  })}
+                  input={<OutlinedInput label="Formats disponibles" />}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {selected.map((key) => {
+                        const f = FORMATS.find(o => o.key === key);
+                        return <Chip key={key} label={f?.label} sx={{ bgcolor: '#c8ebeb', fontWeight: 700 }} />;
+                      })}
+                    </Box>
+                  )}
+                  sx={bleuSelectSx}
+                >
+                  {FORMATS.map((f) => (
+                    <MenuItem key={f.key} value={f.key}>
+                      <Checkbox checked={formData.formats[f.key]} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
+                      <ListItemText primary={f.label} sx={{ '& .MuiTypography-root': { fontWeight: 600, color: '#33658a' } }} />
+                    </MenuItem>
+                  ))}
+                </HoverSelect>
+              </FormControl>
+
+              <FormControl fullWidth>
+                <InputLabel sx={bleuInputLabelSx}>Langue</InputLabel>
+                <HoverSelect
+                  multiple
+                  value={formData.langues}
+                  onChange={(e) => handleChange('langues', e.target.value)}
+                  input={<OutlinedInput label="Langue" />}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {selected.map((v) => <Chip key={v} label={v} sx={{ bgcolor: '#c8ebeb', fontWeight: 700 }} />)}
+                    </Box>
+                  )}
+                  sx={bleuSelectSx}
+                >
+                  {LANGUES.map((lang) => (
+                    <MenuItem key={lang} value={lang}>
+                      <Checkbox checked={formData.langues.includes(lang)} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
+                      <ListItemText primary={lang} sx={{ '& .MuiTypography-root': { fontWeight: 600, color: '#33658a' } }} />
+                    </MenuItem>
+                  ))}
+                </HoverSelect>
+              </FormControl>
+            </Box>
+          )}
+
+          {/* ── Magazine / Livre : Langue seule ── */}
+          {(formData.typePatron === 'Magazine' || formData.typePatron === 'Livre') && (
+            <Box sx={{ maxWidth: 280 }}>
+              <FormControl fullWidth>
+                <InputLabel sx={bleuInputLabelSx}>Langue</InputLabel>
+                <HoverSelect
+                  multiple
+                  value={formData.langues}
+                  onChange={(e) => handleChange('langues', e.target.value)}
+                  input={<OutlinedInput label="Langue" />}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {selected.map((v) => <Chip key={v} label={v} sx={{ bgcolor: '#c8ebeb', fontWeight: 700 }} />)}
+                    </Box>
+                  )}
+                  sx={bleuSelectSx}
+                >
+                  {LANGUES.map((lang) => (
+                    <MenuItem key={lang} value={lang}>
+                      <Checkbox checked={formData.langues.includes(lang)} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
+                      <ListItemText primary={lang} sx={{ '& .MuiTypography-root': { fontWeight: 600, color: '#33658a' } }} />
+                    </MenuItem>
+                  ))}
+                </HoverSelect>
+              </FormControl>
+            </Box>
+          )}
+
+          {/* ── Magazine : Nom + Numéro/date ── */}
+          {formData.typePatron === 'Magazine' && (
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3 }}>
+              <TextField
+                fullWidth label="Nom du magazine"
+                value={formData.nomMagazine}
+                onChange={(e) => handleChange('nomMagazine', e.target.value)}
+                sx={bleuFieldSx}
+              />
+              <TextField
+                fullWidth label="Numéro / date de parution"
+                value={formData.numeroParution}
+                onChange={(e) => handleChange('numeroParution', e.target.value)}
+                sx={bleuFieldSx}
+              />
+            </Box>
+          )}
+
+          {/* ── Livre : Titre + Auteur ── */}
+          {formData.typePatron === 'Livre' && (
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3 }}>
+              <TextField
+                fullWidth label="Titre du livre"
+                value={formData.titreLivre}
+                onChange={(e) => handleChange('titreLivre', e.target.value)}
+                sx={bleuFieldSx}
+              />
+              <TextField
+                fullWidth label="Auteur"
+                value={formData.auteur}
+                onChange={(e) => handleChange('auteur', e.target.value)}
+                sx={bleuFieldSx}
+              />
+            </Box>
+          )}
+
+          {/* ── Magazine / Livre : Page(s) ── */}
+          {(formData.typePatron === 'Magazine' || formData.typePatron === 'Livre') && (
+            <Box sx={{ maxWidth: 280 }}>
+              <TextField
+                fullWidth label="Page(s)"
+                value={formData.pages}
+                onChange={(e) => handleChange('pages', e.target.value)}
+                helperText="Ex: 42, 44-48"
+                sx={bleuFieldSx}
+              />
+            </Box>
+          )}
 
           {/* ── LIGNE 2 : Tailles indiquées | Tailles disponibles | Ma taille ── */}
           <Box sx={{ display: 'flex', gap: 3, flexWrap: { xs: 'wrap', sm: 'nowrap' }, alignItems: 'flex-start' }}>
@@ -653,7 +894,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
                   {isAdulte && (
                     <FormControl fullWidth>
                       <InputLabel sx={bleuInputLabelSx}>Tailles disponibles</InputLabel>
-                      <Select
+                      <HoverSelect
                         multiple
                         value={formData.taillesDisponibles}
                         onChange={(e) => {
@@ -689,13 +930,13 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
                             <ListItemText primary={taille} sx={{ '& .MuiTypography-root': { color: '#33658a', fontWeight: 600 } }} />
                           </MenuItem>
                         ))}
-                      </Select>
+                      </HoverSelect>
                     </FormControl>
                   )}
                   {isEnfant && (
                     <FormControl fullWidth>
                       <InputLabel sx={bleuInputLabelSx}>Tailles enfant</InputLabel>
-                      <Select
+                      <HoverSelect
                         multiple
                         value={formData.taillesEnfant}
                         onChange={(e) => {
@@ -731,13 +972,13 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
                             <ListItemText primary={taille} sx={{ '& .MuiTypography-root': { color: '#33658a', fontWeight: 600 } }} />
                           </MenuItem>
                         ))}
-                      </Select>
+                      </HoverSelect>
                     </FormControl>
                   )}
                   {isBebe && (
                     <FormControl fullWidth>
                       <InputLabel sx={bleuInputLabelSx}>Tailles bébé</InputLabel>
-                      <Select
+                      <HoverSelect
                         multiple
                         value={formData.taillesBebe}
                         onChange={(e) => {
@@ -773,13 +1014,13 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
                             <ListItemText primary={taille} sx={{ '& .MuiTypography-root': { color: '#33658a', fontWeight: 600 } }} />
                           </MenuItem>
                         ))}
-                      </Select>
+                      </HoverSelect>
                     </FormControl>
                   )}
                   {!isAdulte && !isEnfant && !isBebe && (
                     <FormControl fullWidth>
                       <InputLabel sx={bleuInputLabelSx}>Tailles disponibles</InputLabel>
-                      <Select
+                      <HoverSelect
                         multiple
                         value={formData.taillesDisponibles}
                         onChange={(e) => {
@@ -815,7 +1056,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
                             <ListItemText primary={taille} sx={{ '& .MuiTypography-root': { color: '#33658a', fontWeight: 600 } }} />
                           </MenuItem>
                         ))}
-                      </Select>
+                      </HoverSelect>
                     </FormControl>
                   )}
                 </>
@@ -825,26 +1066,24 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
               <Box sx={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', pt: '8px' }}>
                 <FormControlLabel
                   control={<Checkbox checked={formData.maTaille} onChange={(e) => handleChange('maTaille', e.target.checked)} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />}
-                  label={<span style={{ fontWeight: 700, color: '#33658a' }}>✅ Ma taille</span>}
+                  label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, fontWeight: 700, color: '#33658a' }}><Check size={14} strokeWidth={2.5} />Ma taille</Box>}
                 />
               </Box>
             )}
           </Box>
 
-          {/* ── LIGNE 3 : Déjà cousu | Notes (conditionnel) ── */}
+          {/* ── Déjà cousu | Notes ── */}
           <Box sx={{ display: 'flex', gap: 3, flexWrap: { xs: 'wrap', sm: 'nowrap' }, alignItems: 'center' }}>
             <Box sx={{ flex: '0 0 auto' }}>
               <FormControlLabel
                 control={<Checkbox checked={formData.cousu} onChange={(e) => handleChange('cousu', e.target.checked)} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />}
-                label={<span style={{ fontWeight: 700, color: '#33658a' }}>✂️ Déjà cousu</span>}
+                label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, fontWeight: 700, color: '#33658a' }}><Scissors size={14} strokeWidth={2} />Déjà cousu</Box>}
               />
             </Box>
             {formData.cousu && (
               <Box sx={{ flex: '1 1 auto' }}>
                 <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
+                  fullWidth multiline rows={3}
                   label="Notes de réalisation"
                   value={formData.notes}
                   onChange={(e) => handleChange('notes', e.target.value)}
@@ -854,11 +1093,23 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
             )}
           </Box>
 
-          {/* ── LIGNE 4 : À Savoir ── */}
+          {/* ── Recopié | Vintage (Magazine, Pochette, Livre) ── */}
+          {formData.typePatron !== 'PDF' && (
+            <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+              <FormControlLabel
+                control={<Checkbox checked={formData.recopie} onChange={(e) => handleChange('recopie', e.target.checked)} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />}
+                label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, fontWeight: 700, color: '#33658a' }}><ClipboardCopy size={14} strokeWidth={2} />Recopié</Box>}
+              />
+              <FormControlLabel
+                control={<Checkbox checked={formData.vintage} onChange={(e) => handleChange('vintage', e.target.checked)} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />}
+                label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, fontWeight: 700, color: '#33658a' }}><Clock size={14} strokeWidth={2} />Vintage</Box>}
+              />
+            </Box>
+          )}
+
+          {/* ── À Savoir ── */}
           <TextField
-            fullWidth
-            multiline
-            rows={2}
+            fullWidth multiline rows={2}
             label="À Savoir"
             value={formData.aSavoir}
             onChange={(e) => handleChange('aSavoir', e.target.value)}
@@ -866,7 +1117,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
               input: {
                 startAdornment: (
                   <InputAdornment position="start">
-                    <LightbulbIcon sx={{ color: '#33658a' }} />
+                    <Lightbulb size={18} color="#33658a" strokeWidth={2} />
                   </InputAdornment>
                 )
               }
@@ -874,116 +1125,59 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
             sx={bleuFieldSx}
           />
 
-          {/* ── LIGNE 5 : Lien boutique ── */}
-          <TextField
-            fullWidth
-            label="Lien boutique"
-            value={formData.lienShop}
-            onChange={(e) => handleChange('lienShop', e.target.value)}
-            sx={bleuFieldSx}
-          />
+          {/* ── Lien boutique (PDF uniquement) ── */}
+          {formData.typePatron === 'PDF' && (
+            <TextField
+              fullWidth
+              label="Lien boutique"
+              value={formData.lienShop}
+              onChange={(e) => handleChange('lienShop', e.target.value)}
+              sx={bleuFieldSx}
+            />
+          )}
+
+          {/* ── Type de planche (Magazine, Pochette, Livre) ── */}
+          {formData.typePatron !== 'PDF' && (
+            <Box sx={{ maxWidth: 320 }}>
+              <FormControl fullWidth>
+                <InputLabel sx={bleuInputLabelSx}>Type de planche</InputLabel>
+                <HoverSelect
+                  value={formData.typePlanche}
+                  onChange={(e) => handleChange('typePlanche', e.target.value)}
+                  input={<OutlinedInput label="Type de planche" />}
+                  sx={bleuSelectSx}
+                >
+                  {['À télécharger', 'Planches fournies', 'Téléchargé'].map(t => (
+                    <MenuItem key={t} value={t} sx={{ fontWeight: 600 }}>{t}</MenuItem>
+                  ))}
+                </HoverSelect>
+              </FormControl>
+            </Box>
+          )}
 
         </Box>
       </Box>
 
-      {/* ── BLOC 3 : IMAGES (LAVANDE) ── */}
-      <Box sx={{ p: 3, mb: 4, borderRadius: 3, border: '3px solid #a0dede', background: '#e6f9f9' }}>
-        <SectionTitle emoji="🖼️" color="#0cbaba" centered>Images</SectionTitle>
+      {/* ── BLOC 3 : IMAGES ── */}
+      <Box sx={{ p: 3, mb: 4, borderRadius: 3, border: '2px solid rgba(12,186,186,0.2)', background: 'rgba(12,186,186,0.03)' }}>
+        <SectionTitle icon={Image} color="#0cbaba" centered>Images</SectionTitle>
 
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
 
-          {/* Image principale */}
-          <Box sx={{ border: '3px solid #0cbaba', borderRadius: 3, p: 2.5, bgcolor: '#e6f9f9', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 2, transition: 'border-color 0.2s', '&:hover': { borderColor: '#0cbaba' } }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#0cbaba' }}>📸 Image principale</Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button variant="outlined" onClick={() => handlePasteFromClipboard('imagePrincipale')}
-                sx={{ borderColor: '#0cbaba', color: '#0cbaba', fontWeight: 700, borderWidth: 2 }}>
-                Ajouter
-              </Button>
-              {formData.imagePrincipale && (
-                <Button variant="outlined" onClick={() => handleChange('imagePrincipale', '')}
-                  sx={{ borderColor: '#a0dede', color: '#bbb', fontWeight: 700, borderWidth: 2 }}>
-                  Supprimer
-                </Button>
-              )}
-            </Box>
-            {formData.imagePrincipale && (
-              <img src={formData.imagePrincipale} alt="Aperçu" style={{ maxWidth: '100%', borderRadius: 8, display: 'block' }} />
-            )}
-          </Box>
-
-          {/* Tableau des tailles */}
-          <Box sx={{ border: '3px solid #0cbaba', borderRadius: 3, p: 2.5, bgcolor: '#e6f9f9', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 2, transition: 'border-color 0.2s', '&:hover': { borderColor: '#0cbaba' } }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#0cbaba' }}>📊 Tableau des mesures</Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button variant="outlined" onClick={() => handlePasteFromClipboard('imageTableauTailles')}
-                sx={{ borderColor: '#0cbaba', color: '#0cbaba', fontWeight: 700, borderWidth: 2 }}>
-                Ajouter
-              </Button>
-              {formData.imageTableauTailles && (
-                <Button variant="outlined" onClick={() => handleChange('imageTableauTailles', '')}
-                  sx={{ borderColor: '#a0dede', color: '#bbb', fontWeight: 700, borderWidth: 2 }}>
-                  Supprimer
-                </Button>
-              )}
-            </Box>
-            {formData.imageTableauTailles && (
-              <img src={formData.imageTableauTailles} alt="Tableau" style={{ maxWidth: '100%', borderRadius: 8, display: 'block' }} />
-            )}
-          </Box>
-
-          {/* Schéma technique */}
-          <Box sx={{ border: '3px solid #0cbaba', borderRadius: 3, p: 2.5, bgcolor: '#e6f9f9', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 2, transition: 'border-color 0.2s', '&:hover': { borderColor: '#0cbaba' } }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#0cbaba' }}>📐 Schéma technique</Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button variant="outlined" onClick={() => handlePasteFromClipboard('imageSchemaTechnique')}
-                sx={{ borderColor: '#0cbaba', color: '#0cbaba', fontWeight: 700, borderWidth: 2 }}>
-                Ajouter
-              </Button>
-              {formData.imageSchemaTechnique && (
-                <Button variant="outlined" onClick={() => handleChange('imageSchemaTechnique', '')}
-                  sx={{ borderColor: '#a0dede', color: '#bbb', fontWeight: 700, borderWidth: 2 }}>
-                  Supprimer
-                </Button>
-              )}
-            </Box>
-            {formData.imageSchemaTechnique && (
-              <img src={formData.imageSchemaTechnique} alt="Schéma" style={{ maxWidth: '100%', borderRadius: 8, display: 'block' }} />
-            )}
-          </Box>
-
-          {/* Images supplémentaires */}
-          {[
-            { field: 'imageSupp1', label: '🖼️ Image supp. 1' },
-            { field: 'imageSupp2', label: '🖼️ Image supp. 2' },
-            { field: 'imageSupp3', label: '🖼️ Image supp. 3' },
-          ].map(({ field, label }) => (
-            <Box key={field} sx={{ border: '3px dashed #0cbaba', borderRadius: 3, p: 2.5, bgcolor: '#e6f9f9', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 2, transition: 'border-color 0.2s', '&:hover': { borderColor: '#0cbaba' } }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#0cbaba' }}>{label}</Typography>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button variant="outlined" onClick={() => handlePasteFromClipboard(field)}
-                  sx={{ borderColor: '#0cbaba', color: '#0cbaba', fontWeight: 700, borderWidth: 2 }}>
-                  Ajouter
-                </Button>
-                {formData[field] && (
-                  <Button variant="outlined" onClick={() => handleChange(field, '')}
-                    sx={{ borderColor: '#a0dede', color: '#bbb', fontWeight: 700, borderWidth: 2 }}>
-                    Supprimer
-                  </Button>
-                )}
-              </Box>
-              {formData[field] && (
-                <img src={formData[field]} alt={label} style={{ maxWidth: '100%', borderRadius: 8, display: 'block' }} />
-              )}
-            </Box>
-          ))}
+          <ImageField label="Image principale"   icon={Camera}    value={formData.imagePrincipale}      onChange={(v) => handleChange('imagePrincipale', v)}      onPaste={() => handlePasteFromClipboard('imagePrincipale')} />
+          <ImageField label="Tableau des mesures" icon={BarChart2}  value={formData.imageTableauTailles}  onChange={(v) => handleChange('imageTableauTailles', v)}  onPaste={() => handlePasteFromClipboard('imageTableauTailles')} />
+          <ImageField label="Schéma technique"    icon={Ruler}     value={formData.imageSchemaTechnique} onChange={(v) => handleChange('imageSchemaTechnique', v)} onPaste={() => handlePasteFromClipboard('imageSchemaTechnique')} />
+          <ImageField label="Image supp. 1" icon={Image} value={formData.imageSupp1} onChange={(v) => handleChange('imageSupp1', v)} onPaste={() => handlePasteFromClipboard('imageSupp1')} dashed />
+          <ImageField label="Image supp. 2" icon={Image} value={formData.imageSupp2} onChange={(v) => handleChange('imageSupp2', v)} onPaste={() => handlePasteFromClipboard('imageSupp2')} dashed />
+          <ImageField label="Image supp. 3" icon={Image} value={formData.imageSupp3} onChange={(v) => handleChange('imageSupp3', v)} onPaste={() => handlePasteFromClipboard('imageSupp3')} dashed />
 
         </Box>
       </Box>
 
       {/* ── BLOC 4 : PDFs ── */}
-      <Box sx={{ p: 3, mb: 4, borderRadius: 3, border: '3px solid #7b5ea7', background: '#f5f0fb' }}>
-        <SectionTitle emoji="📄" color="#7b5ea7" centered>Fichiers PDF</SectionTitle>
+      {(formData.typePatron === 'PDF' || formData.typePlanche === 'Téléchargé' || !!formData.pdfPath) && (
+      <Box sx={{ p: 3, mb: 4, borderRadius: 3, border: '2px solid rgba(123,94,167,0.2)', background: 'rgba(123,94,167,0.03)' }}>
+        <SectionTitle icon={FileText} color="#7b5ea7" centered>Fichiers PDF</SectionTitle>
 
         {existingPdfs.length > 0 && (
           <Box sx={{ mb: 2 }}>
@@ -1001,15 +1195,9 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
                   rel="noopener noreferrer"
                   clickable
                   size="small"
-                  onDelete={async (e) => {
+                  onDelete={(e) => {
                     e.preventDefault();
-                    if (!window.confirm(`Supprimer "${pdf.name.replace(/\.pdf$/i, '').replace(/^[^_]+_/, '')}" ?`)) return;
-                    try {
-                      await patronService.deletePdf(patron._id, pdf.name);
-                      setExistingPdfs(prev => prev.filter(p => p.name !== pdf.name));
-                    } catch (err) {
-                      console.error('Erreur suppression PDF:', err);
-                    }
+                    setConfirmPdfDeleteInfo(pdf);
                   }}
                   sx={{ bgcolor: '#e8dcf5', color: '#7b5ea7', fontWeight: 700, '&:hover': { bgcolor: '#d4c5f0' } }}
                 />
@@ -1023,12 +1211,12 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
             {pdfFiles.map((p) => (
               <Box key={p.id} sx={{ display: 'flex', gap: 1.5, alignItems: 'center', bgcolor: 'white', borderRadius: 2, px: 2, py: 1, border: '2px solid #d4c5f0', flexWrap: 'wrap' }}>
-                <PictureAsPdfIcon sx={{ color: '#7b5ea7', fontSize: '1.1rem', flexShrink: 0 }} />
+                <FileText size={16} color="#7b5ea7" strokeWidth={2} style={{ flexShrink: 0 }} />
                 <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary', fontStyle: 'italic', flex: 1, minWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {p.fileName}
                 </Typography>
                 <FormControl size="small" sx={{ minWidth: 170 }}>
-                  <Select
+                  <HoverSelect
                     displayEmpty
                     value={PDF_TYPES.some(t => t.key === p.typeKey) ? p.typeKey : (p.typeKey === '__autre__' ? '__autre__' : '')}
                     onChange={(e) => {
@@ -1043,10 +1231,10 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
                   >
                     <MenuItem value="" disabled><em>Choisir un type…</em></MenuItem>
                     {PDF_TYPES.map(t => (
-                      <MenuItem key={t.key} value={t.key}>{t.emoji} {t.label}</MenuItem>
+                      <MenuItem key={t.key} value={t.key}>{t.label}</MenuItem>
                     ))}
-                    <MenuItem value="__autre__">✏️ Autre</MenuItem>
-                  </Select>
+                    <MenuItem value="__autre__">Autre</MenuItem>
+                  </HoverSelect>
                 </FormControl>
                 {(p.typeKey === '__autre__' || editingNameIds.has(p.id)) && (
                   <TextField
@@ -1068,7 +1256,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
                     })}
                     sx={{ color: editingNameIds.has(p.id) ? '#7b5ea7' : '#b0a0d0', p: 0.5 }}
                   >
-                    <DriveFileRenameOutlineIcon fontSize="small" />
+                    <Pencil size={15} strokeWidth={2} />
                   </IconButton>
                 )}
                 <Button
@@ -1107,7 +1295,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
             '&:hover': { borderColor: '#7b5ea7', bgcolor: '#ede7f8' }
           }}
         >
-          <PictureAsPdfIcon sx={{ fontSize: 36, color: '#7b5ea7', mb: 1 }} />
+          <FileText size={40} color="#7b5ea7" strokeWidth={1.5} style={{ marginBottom: 8 }} />
           <Typography variant="body2" color="text.secondary">
             Glisser-déposer les PDF ici<br />ou cliquer pour ouvrir un dossier
           </Typography>
@@ -1134,23 +1322,16 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
           }}
         />
       </Box>
+      )}
 
       {/* ── BOUTONS D'ACTION – EN DEHORS DES BLOCS ── */}
       <Box sx={{ display: 'flex', gap: 3, justifyContent: 'center', alignItems: 'center', mt: 4, mb: 2 }}>
         {patron && onDelete && (
           <IconButton
-            onClick={async () => {
-              if (!window.confirm('Supprimer ce patron ?')) return;
-              try {
-                await patronService.delete(patron._id);
-                onDelete();
-              } catch (err) {
-                console.error('Erreur suppression:', err);
-              }
-            }}
+            onClick={() => setConfirmDeleteOpen(true)}
             sx={{ bgcolor: '#e85d75', color: 'white', '&:hover': { bgcolor: '#c94a60' } }}
           >
-            <DeleteIcon />
+            <Trash2 size={18} strokeWidth={2} />
           </IconButton>
         )}
         <Button
@@ -1162,10 +1343,10 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
             fontSize: '1.1rem',
             px: 5,
             py: 1.5,
-            borderWidth: 3,
+            borderWidth: 2,
             borderColor: '#33658a',
             color: '#33658a',
-            '&:hover': { borderWidth: 3, bgcolor: '#ffddd2' }
+            '&:hover': { borderWidth: 2, bgcolor: 'rgba(51,101,138,0.06)' }
           }}
         >
           Annuler
@@ -1179,16 +1360,72 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
             fontSize: '1.1rem',
             px: 5,
             py: 1.5,
-            background: 'linear-gradient(45deg, #e36397 30%, #e85d75 90%)',
-            boxShadow: '0 3px 5px 2px rgba(227, 99, 151, .3)',
-            '&:hover': {
-              background: 'linear-gradient(45deg, #c94a60 30%, #e36397 90%)',
-            }
+            bgcolor: '#e36397',
+            '&:hover': { bgcolor: '#c9547f' }
           }}
         >
-          {patron ? '✨ Modifier ✨' : '🦄 Ajouter 🦄'}
+          {patron ? 'Modifier' : 'Ajouter'}
         </Button>
       </Box>
+
+      {/* Dialog confirmation suppression patron */}
+      <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)} maxWidth="xs" fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}>
+        <DialogTitle sx={{ fontWeight: 800 }}>Supprimer ce patron ?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            Cette action est irréversible. Le patron et tous ses fichiers PDF associés seront supprimés.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setConfirmDeleteOpen(false)} sx={{ fontWeight: 700 }}>Annuler</Button>
+          <Button
+            variant="contained"
+            onClick={async () => {
+              setConfirmDeleteOpen(false);
+              try {
+                await patronService.delete(patron._id);
+                onDelete();
+              } catch (err) {
+                console.error('Erreur suppression:', err);
+              }
+            }}
+            sx={{ bgcolor: '#e85d75', '&:hover': { bgcolor: '#c94a60' }, fontWeight: 700 }}
+          >
+            Supprimer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog confirmation suppression PDF */}
+      <Dialog open={!!confirmPdfDeleteInfo} onClose={() => setConfirmPdfDeleteInfo(null)} maxWidth="xs" fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}>
+        <DialogTitle sx={{ fontWeight: 800 }}>Supprimer ce PDF ?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            {confirmPdfDeleteInfo?.name.replace(/\.pdf$/i, '').replace(/^[^_]+_/, '')}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setConfirmPdfDeleteInfo(null)} sx={{ fontWeight: 700 }}>Annuler</Button>
+          <Button
+            variant="contained"
+            onClick={async () => {
+              const pdf = confirmPdfDeleteInfo;
+              setConfirmPdfDeleteInfo(null);
+              try {
+                await patronService.deletePdf(patron._id, pdf.name);
+                setExistingPdfs(prev => prev.filter(p => p.name !== pdf.name));
+              } catch (err) {
+                console.error('Erreur suppression PDF:', err);
+              }
+            }}
+            sx={{ bgcolor: '#e85d75', '&:hover': { bgcolor: '#c94a60' }, fontWeight: 700 }}
+          >
+            Supprimer
+          </Button>
+        </DialogActions>
+      </Dialog>
 
     </Paper>
   );

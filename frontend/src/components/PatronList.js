@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Grid, Card, CardContent, CardMedia, Typography, Chip, Box, CircularProgress, Checkbox, FormControlLabel, IconButton, Button, Dialog, DialogContent } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import StraightenIcon from '@mui/icons-material/Straighten';
-import FavoriteIcon from '@mui/icons-material/Favorite';
-import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
+import {
+  Paper, CardMedia, Typography, Chip, Box, CircularProgress,
+  IconButton, Button, Dialog, DialogContent, Tooltip
+} from '@mui/material';
+import { Plus, Ruler, Heart, Scissors } from 'lucide-react';
 import PatronFilters from './PatronFilters';
 import PatronModal from './PatronModal';
 import PatronForm from './PatronForm';
@@ -39,7 +39,7 @@ function PatronList({ patrons, loading, onDelete }) {
 
   const handleSaveForm = () => {
     closeForm();
-    onDelete(); // recharge la liste
+    onDelete();
   };
 
   const toggleFavori = async (patron, e) => {
@@ -57,18 +57,6 @@ function PatronList({ patrons, loading, onDelete }) {
         return [...reverted].sort((a, b) => (b.favori ? 1 : 0) - (a.favori ? 1 : 0));
       });
       console.error('Erreur mise à jour Favori:', error);
-    }
-  };
-
-  const toggleComplet = async (patron, e) => {
-    e.stopPropagation();
-    const newValue = !patron.complet;
-    setFilteredPatrons(prev => prev.map(p => p._id === patron._id ? { ...p, complet: newValue } : p));
-    try {
-      await patronService.setComplet(patron._id, newValue);
-    } catch (error) {
-      setFilteredPatrons(prev => prev.map(p => p._id === patron._id ? { ...p, complet: !newValue } : p));
-      console.error('Erreur mise à jour Complet:', error);
     }
   };
 
@@ -105,7 +93,7 @@ function PatronList({ patrons, loading, onDelete }) {
   const getTaillesRange = (tailles) => {
     if (!tailles || tailles.length === 0) return '';
     if (tailles.length === 1) return tailles[0];
-    return `${tailles[0]} - ${tailles[tailles.length - 1]}`;
+    return `${tailles[0]} – ${tailles[tailles.length - 1]}`;
   };
 
   const getMetrageRange = (min, max) => {
@@ -120,85 +108,87 @@ function PatronList({ patrons, loading, onDelete }) {
       <PatronFilters onFilter={handleFilter} />
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 3, mb: 2 }}>
-        <Typography variant="h6">
+        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
           {filteredPatrons.length} patron{filteredPatrons.length > 1 ? 's' : ''}
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenForm(null)}
-          sx={{ bgcolor: '#33658a', '&:hover': { bgcolor: '#1e4d6b' } }}
-        >
+        <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => handleOpenForm(null)}
+          sx={{ bgcolor: '#e36397', '&:hover': { bgcolor: '#c9547f' }, fontWeight: 700, borderRadius: 2 }}>
           Ajouter un patron
         </Button>
       </Box>
 
-      <Box sx={{
-        display: 'grid',
-        gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr 1fr' },
-        gap: 3
-      }}>
-        {filteredPatrons.map((patron) => (
-          <Card
-            key={patron._id}
-            onClick={() => handleCardClick(patron)}
-            sx={{
+      {filteredPatrons.length === 0 ? (
+        <Box sx={{ border: '2px dashed rgba(26,19,10,0.1)', borderRadius: 4, p: 8, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2.5 }}>
+          <Scissors size={60} strokeWidth={1} color="#ddd" />
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 800, mb: 0.5 }}>Aucun patron trouvé</Typography>
+            <Typography variant="body2" color="text.secondary">Modifiez vos filtres ou ajoutez un nouveau patron.</Typography>
+          </Box>
+          <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => handleOpenForm(null)}
+            sx={{ bgcolor: '#e36397', '&:hover': { bgcolor: '#c9547f' }, fontWeight: 700, borderRadius: 2 }}>
+            Ajouter un patron
+          </Button>
+        </Box>
+      ) : (
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '1fr 1fr 1fr', md: '1fr 1fr 1fr 1fr' }, gap: 2 }}>
+          {filteredPatrons.map((patron) => (
+            <Paper
+              key={patron._id}
+              onClick={() => handleCardClick(patron)}
+              elevation={0}
+              sx={{
                 cursor: 'pointer',
-                width: '100%',
-                height: '100%',
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
-                bgcolor: '#ffddd2',
-                border: patron.complet ? '2px solid #0cbaba' : '2px solid transparent',
-                '&:hover': { boxShadow: 6, bgcolor: '#b2dfcc', color: 'inherit' }
+                border: patron.favori
+                  ? '1.5px solid #e36397'
+                  : '1.5px solid rgba(26,19,10,0.07)',
+                borderRadius: 3,
+                transition: 'all 0.15s',
+                '&:hover': { boxShadow: '0 6px 20px rgba(227,99,151,0.18)', transform: 'translateY(-2px)', borderColor: '#e36397' }
               }}
             >
-              <Box sx={{ height: 200, width: '100%', overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
+              {/* Image */}
+              <Box sx={{ height: 190, width: '100%', overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
                 {patron.imagePrincipale ? (
                   <CardMedia
                     component="img"
                     image={patron.imagePrincipale}
                     alt={patron.modele}
-                    sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    sx={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.2s', '&:hover': { transform: 'scale(1.03)' } }}
                   />
                 ) : (
-                  <Box sx={{ width: '100%', height: '100%', bgcolor: 'grey.100', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Typography variant="body2" color="text.disabled">Pas d'image</Typography>
+                  <Box sx={{ width: '100%', height: '100%', bgcolor: 'rgba(227,99,151,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Scissors size={36} color="#e36397" strokeWidth={1} style={{ opacity: 0.3 }} />
                   </Box>
                 )}
-                {patron.complet && (
-                  <Box sx={{
-                    position: 'absolute', top: 8, right: 8,
-                    bgcolor: '#0cbaba', color: 'white',
-                    borderRadius: '12px', px: 1.5, py: 0.5,
-                    fontSize: '0.75rem', fontWeight: 700,
-                    boxShadow: 2
-                  }}>
-                    ✓ Complet
-                  </Box>
-                )}
-                <IconButton
-                  onClick={e => toggleFavori(patron, e)}
-                  size="small"
-                  sx={{
-                    position: 'absolute', top: 4, left: 4,
-                    bgcolor: 'rgba(255,255,255,0.85)',
-                    '&:hover': { bgcolor: 'rgba(255,255,255,1)' },
-                    p: 0.5
-                  }}
-                >
-                  {patron.favori
-                    ? <FavoriteIcon sx={{ color: '#e85d75', fontSize: '1.3rem' }} />
-                    : <FavoriteBorderIcon sx={{ color: '#e85d75', fontSize: '1.3rem' }} />
-                  }
-                </IconButton>
-              </Box>
-              <CardContent sx={{ flexGrow: 1 }}>
 
-                {/* Ligne 1 : Marque | Drapeaux */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.25 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', fontSize: '0.75rem' }}>
+                {/* Bouton favori */}
+                <Tooltip title={patron.favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}>
+                  <IconButton
+                    onClick={e => toggleFavori(patron, e)}
+                    size="small"
+                    sx={{
+                      position: 'absolute', top: 6, left: 6,
+                      bgcolor: 'rgba(255,255,255,0.88)',
+                      '&:hover': { bgcolor: 'white' },
+                      p: 0.5
+                    }}
+                  >
+                    <Heart
+                      size={16}
+                      color="#e85d75"
+                      fill={patron.favori ? '#e85d75' : 'none'}
+                    />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+
+              {/* Header carte */}
+              <Box sx={{ px: 1.5, pt: 1.25, pb: 0.5, borderBottom: '1px solid rgba(26,19,10,0.05)', bgcolor: 'rgba(0,0,0,0.015)' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', fontSize: '0.68rem' }}>
                     {patron.marque}
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
@@ -206,96 +196,83 @@ function PatronList({ patrons, loading, onDelete }) {
                       const flag = LANGUE_DRAPEAUX[lang];
                       if (!flag) return null;
                       return flag.img
-                        ? <img key={lang} src={flag.img} alt={lang} title={lang} style={{ height: '15px', verticalAlign: 'middle', borderRadius: '2px' }} />
-                        : <span key={lang} title={lang} style={{ fontSize: '1.1rem', lineHeight: 1 }}>{flag.emoji}</span>;
+                        ? <img key={lang} src={flag.img} alt={lang} title={lang} style={{ height: '13px', verticalAlign: 'middle', borderRadius: '2px' }} />
+                        : <span key={lang} title={lang} style={{ fontSize: '1rem', lineHeight: 1 }}>{flag.emoji}</span>;
                     })}
                   </Box>
                 </Box>
-
-                {/* Ligne 2 : Modèle | Cousu */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.25 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 800, fontSize: '1.15rem', lineHeight: 1.2, textShadow: '0 1px 2px rgba(0,0,0,0.10)' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography sx={{ fontWeight: 800, fontSize: '0.95rem', lineHeight: 1.2 }}>
                     {patron.modele}
                   </Typography>
                   {patron.cousu && (
-                    <Chip label="✂️" size="small" sx={{ bgcolor: '#e36397', color: 'white' }} title="Déjà cousu" />
+                    <Tooltip title="Déjà cousu">
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Scissors size={14} color="#e36397" strokeWidth={2.5} />
+                      </Box>
+                    </Tooltip>
                   )}
                 </Box>
                 {patron.details?.some(d => d.toLowerCase() === 'options multiples') && (
-                  <Typography variant="body2" sx={{ color: '#e36397', fontWeight: 700, fontSize: '0.78rem', mb: 1 }}>
+                  <Typography variant="body2" sx={{ color: '#e36397', fontWeight: 700, fontSize: '0.72rem' }}>
                     Options multiples
                   </Typography>
                 )}
+              </Box>
 
-                {/* Ligne 3 : Type | Genre */}
-                <Grid container spacing={1} sx={{ mb: 1 }}>
-                  <Grid item xs={6}>
-                    <Typography variant="body2" color="text.secondary">
-                      {patron.types?.length > 0 ? patron.types.join(', ') : (patron.typeAccessoires?.join(', ') || patron.typeAccessoire || '')}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="body2" color="text.secondary">
-                      {patron.genres?.join(', ')}
-                    </Typography>
-                  </Grid>
-                </Grid>
+              {/* Body carte */}
+              <Box sx={{ px: 1.5, py: 1, flex: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                {/* Type + Genre */}
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.78rem' }}>
+                  {[
+                    patron.types?.length > 0 ? patron.types.join(', ') : (patron.typeAccessoires?.join(', ') || patron.typeAccessoire || ''),
+                    patron.genres?.join(', ')
+                  ].filter(Boolean).join(' · ')}
+                </Typography>
 
-                {/* Ligne 4 : Chips tissu | Tailles */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                    {patron.tissuTypes?.includes('Chaîne et trame') && (
-                      <Chip label="Chaîne et trame" size="small" color="primary" />
-                    )}
-                    {patron.tissuTypes?.includes('Maille') && (
-                      <Chip label="Maille" size="small" sx={{ bgcolor: '#0cbaba', color: 'white' }} />
-                    )}
-                  </Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'right' }}>
-                    {getTaillesRange(patron.taillesDisponibles) || getTaillesRange(patron.taillesEnfant) || patron.dimensions || ''}
+                {/* Tailles */}
+                {(patron.taillesDisponibles?.length > 0 || patron.taillesEnfant?.length > 0 || patron.dimensions) && (
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.78rem' }}>
+                    {getTaillesRange(patron.taillesDisponibles) || getTaillesRange(patron.taillesEnfant) || patron.dimensions}
                   </Typography>
-                </Box>
+                )}
 
-                {/* Ligne 5 : Métrage */}
+                {/* Type tissu chips */}
+                {patron.tissuTypes?.length > 0 && (
+                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                    {patron.tissuTypes.includes('Chaîne et trame') && (
+                      <Chip label="Chaîne et trame" size="small" sx={{ bgcolor: '#e3eef7', color: '#33658a', fontWeight: 700, fontSize: '0.65rem', height: 18 }} />
+                    )}
+                    {patron.tissuTypes.includes('Maille') && (
+                      <Chip label="Maille" size="small" sx={{ bgcolor: '#e0f7f7', color: '#0cbaba', fontWeight: 700, fontSize: '0.65rem', height: 18 }} />
+                    )}
+                  </Box>
+                )}
+
+                {/* Métrage */}
                 {(patron.metrageMin || patron.metrageMax) && (
-                  <Box sx={{ mb: 1, display: 'flex', justifyContent: 'center' }}>
-                    <Chip
-                      icon={<StraightenIcon sx={{ color: 'white !important' }} />}
-                      label={getMetrageRange(patron.metrageMin, patron.metrageMax)}
-                      size="small"
-                      sx={{ fontSize: '0.75rem', bgcolor: '#33658a', color: 'white', width: '100%', justifyContent: 'center' }}
-                    />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Ruler size={12} color="#33658a" strokeWidth={2} />
+                    <Typography variant="body2" sx={{ fontSize: '0.78rem', color: '#33658a', fontWeight: 700 }}>
+                      {getMetrageRange(patron.metrageMin, patron.metrageMax)}
+                    </Typography>
                   </Box>
                 )}
 
-                {/* Ligne 6 : Formats */}
+                {/* Formats */}
                 {(patron.formats?.projecteur || patron.formats?.a4 || patron.formats?.a0) && (
-                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1, justifyContent: 'center' }}>
-                    {patron.formats?.projecteur && <Chip label="Projecteur" size="small" sx={{ bgcolor: '#e36397', color: 'white', flex: 1 }} />}
-                    {patron.formats?.a4 && <Chip label="A4" size="small" sx={{ bgcolor: '#e36397', color: 'white', flex: 1 }} />}
-                    {patron.formats?.a0 && <Chip label="A0" size="small" sx={{ bgcolor: '#e36397', color: 'white', flex: 1 }} />}
+                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                    {patron.formats?.projecteur && <Chip label="Proj." size="small" sx={{ bgcolor: '#fce4ec', color: '#e36397', fontWeight: 700, fontSize: '0.65rem', height: 18 }} />}
+                    {patron.formats?.a4 && <Chip label="A4" size="small" sx={{ bgcolor: '#fce4ec', color: '#e36397', fontWeight: 700, fontSize: '0.65rem', height: 18 }} />}
+                    {patron.formats?.a0 && <Chip label="A0" size="small" sx={{ bgcolor: '#fce4ec', color: '#e36397', fontWeight: 700, fontSize: '0.65rem', height: 18 }} />}
                   </Box>
                 )}
 
-                {/* Complet */}
-                <Box sx={{ mt: 'auto', pt: 1, borderTop: '1px solid #eee' }} onClick={e => e.stopPropagation()}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={patron.complet || false}
-                        onChange={e => toggleComplet(patron, e)}
-                        size="small"
-                        sx={{ color: '#0cbaba', '&.Mui-checked': { color: '#0cbaba' } }}
-                      />
-                    }
-                    label={<span style={{ fontSize: '0.8rem', color: '#0cbaba', fontWeight: 600 }}>Complet</span>}
-                  />
-                </Box>
-
-              </CardContent>
-            </Card>
-        ))}
-      </Box>
+              </Box>
+            </Paper>
+          ))}
+        </Box>
+      )}
 
       {selectedPatron && (
         <PatronModal

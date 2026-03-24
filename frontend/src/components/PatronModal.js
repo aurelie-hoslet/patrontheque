@@ -2,14 +2,9 @@ import React, { useState } from 'react';
 import {
   Dialog, DialogTitle, DialogContent,
   Typography, Box, IconButton, Popover,
-  CircularProgress, Button
+  CircularProgress, Button, Chip
 } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import EditIcon from '@mui/icons-material/Edit';
-import LightbulbIcon from '@mui/icons-material/Lightbulb';
-import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import { X, Pencil, Lightbulb, FileText, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { patronService } from '../services/api';
 
 const LANGUE_DRAPEAUX = {
@@ -73,26 +68,26 @@ function PatronModal({ open, patron, onClose, onEdit, onDelete }) {
 
   return (
     <>
-      <Dialog
-        open={open}
-        onClose={() => {}}
-        maxWidth="md"
-        fullWidth
-        scroll="paper"
-      >
-        <DialogTitle sx={{ py: 1 }}>
+      <Dialog open={open} onClose={() => {}} maxWidth="md" fullWidth scroll="paper"
+        PaperProps={{ sx: { borderRadius: 3 } }}>
+        <DialogTitle sx={{ py: 1.5, px: 2.5 }}>
           <Box display="flex" justifyContent="space-between" alignItems="center">
-            {patron.aSavoir ? (
-              <IconButton
-                size="small"
-                onClick={(e) => setASavoirAnchor(e.currentTarget)}
-                sx={{ color: '#e36397' }}
-              >
-                <LightbulbIcon />
-              </IconButton>
-            ) : <Box />}
-            <IconButton onClick={onClose}>
-              <CloseIcon />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {patron.aSavoir && (
+                <IconButton size="small" onClick={(e) => setASavoirAnchor(e.currentTarget)}
+                  sx={{ color: '#e36397', bgcolor: '#fce4ec', '&:hover': { bgcolor: '#f8c8d8' } }}>
+                  <Lightbulb size={16} strokeWidth={2} />
+                </IconButton>
+              )}
+              <Button size="small" variant="outlined" startIcon={<Pencil size={14} />}
+                onClick={() => { onEdit(patron); onClose(); }}
+                sx={{ borderColor: '#33658a', color: '#33658a', fontWeight: 700, borderWidth: 2, borderRadius: 1.5 }}>
+                Modifier
+              </Button>
+            </Box>
+            <IconButton size="small" onClick={onClose}
+              sx={{ color: 'text.secondary' }}>
+              <X size={18} />
             </IconButton>
           </Box>
         </DialogTitle>
@@ -103,32 +98,46 @@ function PatronModal({ open, patron, onClose, onEdit, onDelete }) {
           onClose={() => setASavoirAnchor(null)}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+          PaperProps={{ sx: { borderRadius: 2, boxShadow: '0 8px 24px rgba(26,19,10,0.12)' } }}
         >
           <Box sx={{ p: 2, maxWidth: 320, display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-            <LightbulbIcon sx={{ color: '#e36397', mt: '2px', flexShrink: 0 }} />
+            <Lightbulb size={18} color="#e36397" strokeWidth={2} style={{ marginTop: 2, flexShrink: 0 }} />
             <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{patron.aSavoir}</Typography>
           </Box>
         </Popover>
 
         <DialogContent dividers sx={{ pt: 2 }}>
           {/* Titre */}
-          <Typography variant="h4" fontWeight={800} sx={{ mb: 2.5, lineHeight: 1.2, textAlign: 'center' }}>
+          <Typography variant="h4" fontWeight={800} sx={{ mb: 2, lineHeight: 1.2, textAlign: 'center' }}>
             {patron.modele}
             <Typography component="span" variant="h4" fontWeight={400} sx={{ color: 'text.secondary', ml: 1 }}>
               {patron.marque}
             </Typography>
           </Typography>
 
+          {/* Langues */}
+          {patron.langues?.length > 0 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.75, mb: 2 }}>
+              {patron.langues.map(lang => {
+                const flag = LANGUE_DRAPEAUX[lang];
+                if (!flag) return <Chip key={lang} label={lang} size="small" />;
+                return flag.img
+                  ? <img key={lang} src={flag.img} alt={lang} title={lang} style={{ height: '18px', verticalAlign: 'middle', borderRadius: '2px' }} />
+                  : <span key={lang} title={lang} style={{ fontSize: '1.2rem', lineHeight: 1 }}>{flag.emoji}</span>;
+              })}
+            </Box>
+          )}
+
           {/* Carrousel */}
           {images.length > 0 && (
-            <Box sx={{ mb: 1.5 }}>
+            <Box sx={{ mb: 2 }}>
               <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
                 {images.length > 1 && (
                   <IconButton
                     onClick={() => setCarouselIndex(i => (i - 1 + images.length) % images.length)}
-                    sx={{ position: 'absolute', left: 0, zIndex: 1, bgcolor: 'rgba(255,255,255,0.8)', '&:hover': { bgcolor: 'white' } }}
+                    sx={{ position: 'absolute', left: 0, zIndex: 1, bgcolor: 'rgba(255,255,255,0.88)', '&:hover': { bgcolor: 'white' } }}
                   >
-                    <ChevronLeftIcon />
+                    <ChevronLeft size={20} />
                   </IconButton>
                 )}
                 <Box
@@ -141,9 +150,9 @@ function PatronModal({ open, patron, onClose, onEdit, onDelete }) {
                 {images.length > 1 && (
                   <IconButton
                     onClick={() => setCarouselIndex(i => (i + 1) % images.length)}
-                    sx={{ position: 'absolute', right: 0, zIndex: 1, bgcolor: 'rgba(255,255,255,0.8)', '&:hover': { bgcolor: 'white' } }}
+                    sx={{ position: 'absolute', right: 0, zIndex: 1, bgcolor: 'rgba(255,255,255,0.88)', '&:hover': { bgcolor: 'white' } }}
                   >
-                    <ChevronRightIcon />
+                    <ChevronRight size={20} />
                   </IconButton>
                 )}
               </Box>
@@ -155,7 +164,7 @@ function PatronModal({ open, patron, onClose, onEdit, onDelete }) {
                       onClick={() => setCarouselIndex(i)}
                       sx={{
                         width: i === idx ? 20 : 8, height: 8, borderRadius: 4,
-                        bgcolor: i === idx ? '#33658a' : '#c8dcec',
+                        bgcolor: i === idx ? '#e36397' : 'rgba(26,19,10,0.15)',
                         cursor: 'pointer', transition: 'all 0.2s'
                       }}
                     />
@@ -164,16 +173,6 @@ function PatronModal({ open, patron, onClose, onEdit, onDelete }) {
               )}
             </Box>
           )}
-
-          {/* Modifier */}
-          <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 2.5 }}>
-            <IconButton
-              onClick={() => { onEdit(patron); onClose(); }}
-              sx={{ bgcolor: 'primary.main', color: 'white', '&:hover': { bgcolor: 'primary.dark' } }}
-            >
-              <EditIcon />
-            </IconButton>
-          </Box>
 
           {/* Mosaïque infos */}
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
@@ -202,19 +201,6 @@ function PatronModal({ open, patron, onClose, onEdit, onDelete }) {
             )}
             {patron.details?.length > 0 && (
               <InfoCard label="Détails" color="#f9fbe7">{patron.details.join(', ')}</InfoCard>
-            )}
-            {patron.langues?.length > 0 && (
-              <InfoCard label="Langue" color="#fce4ec">
-                <Box sx={{ display: 'flex', gap: 0.75, alignItems: 'center' }}>
-                  {patron.langues.map(lang => {
-                    const flag = LANGUE_DRAPEAUX[lang];
-                    if (!flag) return <span key={lang}>{lang}</span>;
-                    return flag.img
-                      ? <img key={lang} src={flag.img} alt={lang} title={lang} style={{ height: '18px', verticalAlign: 'middle', borderRadius: '2px' }} />
-                      : <span key={lang} title={lang} style={{ fontSize: '1.2rem', lineHeight: 1 }}>{flag.emoji}</span>;
-                  })}
-                </Box>
-              </InfoCard>
             )}
             {patron.notes && (
               <InfoCard label="Notes" color="#fffde7" fullWidth>{patron.notes}</InfoCard>
@@ -247,7 +233,7 @@ function PatronModal({ open, patron, onClose, onEdit, onDelete }) {
             </Box>
           )}
 
-          {/* Mosaïque tailles + métrage */}
+          {/* Tailles + métrage */}
           {(patron.taillesIndiquees || patron.dimensions || patron.taillesEnfant?.length > 0 || patron.taillesDisponibles?.length > 0 || patron.metrageMin || patron.metrageMax) && (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
               {patron.taillesIndiquees && (
@@ -282,9 +268,9 @@ function PatronModal({ open, patron, onClose, onEdit, onDelete }) {
 
           {/* PDFs */}
           {patron.pdfPath && (
-            <Box sx={{ mt: 1, pt: 2, borderTop: '2px solid #d4c5f0' }}>
+            <Box sx={{ mt: 1, pt: 2, borderTop: '2px solid rgba(123,94,167,0.15)' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                <PictureAsPdfIcon sx={{ color: '#7b5ea7', fontSize: '1.1rem' }} />
+                <FileText size={16} color="#7b5ea7" strokeWidth={2} />
                 <Typography variant="subtitle2" sx={{ color: '#7b5ea7', fontWeight: 700 }}>Fichiers PDF</Typography>
               </Box>
               {pdfs === null ? (
@@ -303,14 +289,14 @@ function PatronModal({ open, patron, onClose, onEdit, onDelete }) {
                       sx={{
                         display: 'flex', alignItems: 'center', gap: 0.75,
                         px: 1.5, py: 0.75, borderRadius: 2,
-                        border: '2px solid #d4c5f0', bgcolor: '#f5f0fb',
+                        border: '2px solid rgba(123,94,167,0.25)', bgcolor: '#f5f0fb',
                         color: '#7b5ea7', fontWeight: 700, fontSize: '0.85rem',
                         textDecoration: 'none', cursor: 'pointer',
                         transition: 'all 0.15s',
                         '&:hover': { bgcolor: '#ebe4f7', borderColor: '#7b5ea7' }
                       }}
                     >
-                      <PictureAsPdfIcon sx={{ fontSize: '1rem' }} />
+                      <FileText size={14} strokeWidth={2} />
                       {pdf.name.replace(/\.pdf$/i, '').replace(/^[^_]+_/, '')}
                     </Box>
                   ))}
@@ -328,27 +314,24 @@ function PatronModal({ open, patron, onClose, onEdit, onDelete }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 component="a"
-                sx={{ borderColor: '#33658a', color: '#33658a', '&:hover': { borderColor: '#1e4d6b', bgcolor: '#f0f6fb' } }}
+                endIcon={<ExternalLink size={14} />}
+                sx={{ borderColor: '#33658a', color: '#33658a', fontWeight: 700, borderWidth: 2, '&:hover': { borderColor: '#1e4d6b', bgcolor: '#f0f6fb' } }}
               >
-                Boutique
+                Voir la boutique
               </Button>
             </Box>
           )}
         </DialogContent>
-
       </Dialog>
 
-      <Dialog
-        open={lightboxOpen}
-        onClose={() => setLightboxOpen(false)}
-        maxWidth="lg"
-        fullWidth
-      >
+      {/* Lightbox */}
+      <Dialog open={lightboxOpen} onClose={() => setLightboxOpen(false)} maxWidth="lg" fullWidth
+        PaperProps={{ sx: { bgcolor: 'transparent', boxShadow: 'none' } }}>
         <Box
           component="img"
           src={lightboxImage}
           alt="Image agrandie"
-          sx={{ width: '100%', height: 'auto' }}
+          sx={{ width: '100%', height: 'auto', cursor: 'zoom-out' }}
           onClick={() => setLightboxOpen(false)}
         />
       </Dialog>

@@ -1,17 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box, TextField, Select, MenuItem, FormControl, InputLabel,
-  Button, Typography, Paper, IconButton, Checkbox, FormControlLabel,
-  List, ListItem, ListItemText, ListItemSecondaryAction
+  Button, Typography, Paper, IconButton, Checkbox,
+  List, ListItem, ListItemText
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import DeleteIcon from '@mui/icons-material/Delete';
-import ContentPasteIcon from '@mui/icons-material/ContentPaste';
+import { ClipboardList, Plus, Trash2, Clipboard, Pencil } from 'lucide-react';
 import { projetService } from '../services/api';
 
 const defaultForm = {
   nom: '', patronId: '', tissuId: '', statut: 'En cours',
   notes: '', image: '', dateDebut: '', dateFin: '', etapes: []
+};
+
+const fieldSx = {
+  '& .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: '#e8e3dd' },
+  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a' },
+  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a', borderWidth: 2 },
+  '& .MuiInputLabel-root': { fontWeight: 600, color: '#6b6158' },
+  '& .MuiInputLabel-root.Mui-focused': { color: '#33658a' },
 };
 
 function ProjetForm({ projet, patrons, tissus, onSave, onCancel }) {
@@ -99,24 +105,29 @@ function ProjetForm({ projet, patrons, tissus, onSave, onCancel }) {
   const nomProjetAffiche = formData.nom || (patronSelectionne ? `${patronSelectionne.marque} - ${patronSelectionne.modele}` : '');
 
   return (
-    <Paper sx={{ p: 3, maxWidth: 700, mx: 'auto', bgcolor: '#fff8f6' }}>
-      <Typography variant="h5" sx={{ mb: 3, fontWeight: 800, color: '#33658a' }}>
-        {projet ? '✏️ Modifier le projet' : '🪡 Nouveau projet'}
-      </Typography>
+    <Paper elevation={0} sx={{ p: 3, maxWidth: 700, mx: 'auto' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
+        <Box sx={{ width: 36, height: 36, borderRadius: '50%', bgcolor: '#33658a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <ClipboardList size={18} color="white" strokeWidth={2} />
+        </Box>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>
+          {projet ? 'Modifier le projet' : 'Nouveau projet'}
+        </Typography>
+      </Box>
 
-      <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
 
         <TextField
           label="Nom du projet (optionnel)"
           value={formData.nom}
           onChange={e => handleChange('nom', e.target.value)}
           fullWidth
-          placeholder={nomProjetAffiche || 'Ex: Robe d\'été bleue'}
+          placeholder={nomProjetAffiche || "Ex: Robe d'été bleue"}
           helperText="Si vide, le nom du patron sera utilisé"
+          sx={fieldSx}
         />
 
-        {/* Patron */}
-        <FormControl fullWidth>
+        <FormControl fullWidth sx={fieldSx}>
           <InputLabel>Patron associé</InputLabel>
           <Select value={formData.patronId} label="Patron associé" onChange={e => handleChange('patronId', e.target.value)}>
             <MenuItem value=""><em>Aucun</em></MenuItem>
@@ -126,8 +137,7 @@ function ProjetForm({ projet, patrons, tissus, onSave, onCancel }) {
           </Select>
         </FormControl>
 
-        {/* Tissu */}
-        <FormControl fullWidth>
+        <FormControl fullWidth sx={fieldSx}>
           <InputLabel>Tissu associé</InputLabel>
           <Select value={formData.tissuId} label="Tissu associé" onChange={e => handleChange('tissuId', e.target.value)}>
             <MenuItem value=""><em>Aucun</em></MenuItem>
@@ -139,7 +149,6 @@ function ProjetForm({ projet, patrons, tissus, onSave, onCancel }) {
           </Select>
         </FormControl>
 
-        {/* Dates */}
         <Box sx={{ display: 'flex', gap: 2 }}>
           <TextField
             label="Date de début"
@@ -148,6 +157,7 @@ function ProjetForm({ projet, patrons, tissus, onSave, onCancel }) {
             onChange={e => handleChange('dateDebut', e.target.value)}
             InputLabelProps={{ shrink: true }}
             fullWidth
+            sx={fieldSx}
           />
           <TextField
             label="Date de fin"
@@ -156,11 +166,11 @@ function ProjetForm({ projet, patrons, tissus, onSave, onCancel }) {
             onChange={e => handleChange('dateFin', e.target.value)}
             InputLabelProps={{ shrink: true }}
             fullWidth
+            sx={fieldSx}
           />
         </Box>
 
-        {/* Statut */}
-        <FormControl fullWidth>
+        <FormControl fullWidth sx={fieldSx}>
           <InputLabel>Statut</InputLabel>
           <Select value={formData.statut} label="Statut" onChange={e => handleChange('statut', e.target.value)}>
             <MenuItem value="En cours">En cours</MenuItem>
@@ -170,7 +180,9 @@ function ProjetForm({ projet, patrons, tissus, onSave, onCancel }) {
 
         {/* Étapes */}
         <Box>
-          <Typography variant="body1" sx={{ fontWeight: 700, mb: 1 }}>Étapes</Typography>
+          <Typography variant="body2" sx={{ mb: 1, fontWeight: 700, color: 'text.secondary', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Étapes
+          </Typography>
           <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
             <TextField
               size="small"
@@ -178,14 +190,14 @@ function ProjetForm({ projet, patrons, tissus, onSave, onCancel }) {
               value={nouvelleEtape}
               onChange={e => setNouvelleEtape(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ajouterEtape(); } }}
-              sx={{ flexGrow: 1 }}
+              sx={{ flexGrow: 1, ...fieldSx }}
             />
-            <IconButton onClick={ajouterEtape} sx={{ bgcolor: '#33658a', color: 'white', '&:hover': { bgcolor: '#1e4d6b' } }}>
-              <AddIcon />
+            <IconButton onClick={ajouterEtape} sx={{ bgcolor: '#33658a', color: 'white', borderRadius: 1.5, '&:hover': { bgcolor: '#1e4d6b' } }}>
+              <Plus size={18} />
             </IconButton>
           </Box>
           {formData.etapes.length > 0 && (
-            <List dense sx={{ bgcolor: 'white', borderRadius: 1, border: '1px solid #eee' }}>
+            <List dense sx={{ bgcolor: 'rgba(51,101,138,0.04)', borderRadius: 2, border: '1.5px solid rgba(26,19,10,0.07)' }}>
               {formData.etapes.map((etape, idx) => (
                 <ListItem key={idx} disablePadding sx={{ px: 1 }}>
                   <Checkbox
@@ -196,20 +208,17 @@ function ProjetForm({ projet, patrons, tissus, onSave, onCancel }) {
                   />
                   <ListItemText
                     primary={etape.titre}
-                    sx={{ textDecoration: etape.faite ? 'line-through' : 'none', color: etape.faite ? 'text.disabled' : 'inherit' }}
+                    primaryTypographyProps={{ sx: { textDecoration: etape.faite ? 'line-through' : 'none', color: etape.faite ? 'text.disabled' : 'inherit', fontSize: '0.88rem' } }}
                   />
-                  <ListItemSecondaryAction>
-                    <IconButton size="small" onClick={() => supprimerEtape(idx)} edge="end">
-                      <DeleteIcon fontSize="small" sx={{ color: '#e85d75' }} />
-                    </IconButton>
-                  </ListItemSecondaryAction>
+                  <IconButton size="small" onClick={() => supprimerEtape(idx)} edge="end" sx={{ color: '#e85d75', mr: 0.5 }}>
+                    <Trash2 size={14} strokeWidth={2} />
+                  </IconButton>
                 </ListItem>
               ))}
             </List>
           )}
         </Box>
 
-        {/* Notes */}
         <TextField
           label="Notes"
           value={formData.notes}
@@ -217,11 +226,14 @@ function ProjetForm({ projet, patrons, tissus, onSave, onCancel }) {
           fullWidth
           multiline
           rows={3}
+          sx={fieldSx}
         />
 
         {/* Image */}
         <Box>
-          <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>Photo du projet</Typography>
+          <Typography variant="body2" sx={{ mb: 1, fontWeight: 700, color: 'text.secondary', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Photo du projet
+          </Typography>
           {formData.image ? (
             <Box sx={{ position: 'relative', display: 'inline-block' }}>
               <img src={formData.image} alt="Aperçu" style={{ width: 160, height: 120, objectFit: 'cover', borderRadius: 8 }} />
@@ -230,26 +242,23 @@ function ProjetForm({ projet, patrons, tissus, onSave, onCancel }) {
                 onClick={() => handleChange('image', '')}
                 sx={{ position: 'absolute', top: -8, right: -8, bgcolor: 'white', boxShadow: 1 }}
               >
-                <DeleteIcon fontSize="small" />
+                <Trash2 size={14} strokeWidth={2} />
               </IconButton>
             </Box>
           ) : (
-            <Button
-              variant="outlined"
-              startIcon={<ContentPasteIcon />}
-              onClick={handlePasteImage}
-              sx={{ borderColor: '#33658a', color: '#33658a' }}
-            >
+            <Button variant="outlined" startIcon={<Clipboard size={16} />} onClick={handlePasteImage}
+              sx={{ borderColor: '#33658a', color: '#33658a', fontWeight: 600, borderWidth: 2 }}>
               Coller depuis le presse-papier
             </Button>
           )}
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
-          <Button type="button" onClick={handleSubmit} variant="contained" size="large" sx={{ bgcolor: '#33658a', '&:hover': { bgcolor: '#1e4d6b' } }}>
-            {projet ? '✨ Modifier' : '🪡 Créer le projet'}
+        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', pt: 1 }}>
+          <Button onClick={onCancel} sx={{ color: 'text.secondary' }}>Annuler</Button>
+          <Button type="button" onClick={handleSubmit} variant="contained" startIcon={projet ? <Pencil size={16} /> : <Plus size={16} />}
+            sx={{ bgcolor: '#33658a', '&:hover': { bgcolor: '#1e4d6b' }, fontWeight: 700 }}>
+            {projet ? 'Modifier' : 'Créer le projet'}
           </Button>
-          <Button variant="outlined" size="large" onClick={onCancel}>Annuler</Button>
         </Box>
       </Box>
     </Paper>

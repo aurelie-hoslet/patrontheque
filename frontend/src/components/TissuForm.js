@@ -3,37 +3,36 @@ import {
   Box, TextField, Select, MenuItem, FormControl, InputLabel,
   Button, Typography, Paper, IconButton
 } from '@mui/material';
-import ContentPasteIcon from '@mui/icons-material/ContentPaste';
-import DeleteIcon from '@mui/icons-material/Delete';
+import { Clipboard, Trash2, Layers } from 'lucide-react';
 import { tissuService } from '../services/api';
 
 const TYPES_TISSU = ['Chaîne et trame', 'Maille', 'Dentelle', 'Cuir', 'Autre'];
 
-const defaultForm = {
-  nom: '', type: '', couleur: '', quantite: '', provenance: '', image: ''
+const defaultForm = { nom: '', type: '', couleur: '', quantite: '', provenance: '', image: '' };
+
+const fieldSx = {
+  '& .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: '#e8e3dd' },
+  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a' },
+  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#33658a', borderWidth: 2 },
+  '& .MuiInputLabel-root': { fontWeight: 600, color: '#6b6158' },
+  '& .MuiInputLabel-root.Mui-focused': { color: '#33658a' },
 };
 
 function TissuForm({ tissu, onSave, onCancel }) {
   const [formData, setFormData] = useState(defaultForm);
 
   useEffect(() => {
-    if (tissu) {
-      setFormData({
-        nom: tissu.nom || '',
-        type: tissu.type || '',
-        couleur: tissu.couleur || '',
-        quantite: tissu.quantite !== undefined ? tissu.quantite : '',
-        provenance: tissu.provenance || '',
-        image: tissu.image || ''
-      });
-    } else {
-      setFormData(defaultForm);
-    }
+    setFormData(tissu ? {
+      nom: tissu.nom || '',
+      type: tissu.type || '',
+      couleur: tissu.couleur || '',
+      quantite: tissu.quantite !== undefined ? tissu.quantite : '',
+      provenance: tissu.provenance || '',
+      image: tissu.image || ''
+    } : defaultForm);
   }, [tissu]);
 
-  const handleChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
+  const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
 
   const handlePasteImage = async () => {
     try {
@@ -66,28 +65,28 @@ function TissuForm({ tissu, onSave, onCancel }) {
         await tissuService.create(data);
       }
       onSave();
-    } catch (error) {
-      console.error('Erreur sauvegarde tissu:', error);
+    } catch {
       alert('Erreur lors de la sauvegarde');
     }
   };
 
   return (
-    <Paper sx={{ p: 3, maxWidth: 600, mx: 'auto', bgcolor: '#fff8f6' }}>
-      <Typography variant="h5" sx={{ mb: 3, fontWeight: 800, color: '#33658a' }}>
-        {tissu ? '✏️ Modifier le tissu' : '🧵 Ajouter un tissu'}
-      </Typography>
+    <Paper elevation={0} sx={{ p: 3, maxWidth: 600, mx: 'auto' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
+        <Box sx={{ width: 36, height: 36, borderRadius: '50%', bgcolor: '#33658a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Layers size={18} color="white" strokeWidth={2} />
+        </Box>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>
+          {tissu ? 'Modifier le tissu' : 'Ajouter un tissu'}
+        </Typography>
+      </Box>
 
-      <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
 
-        <TextField
-          label="Nom / référence *"
-          value={formData.nom}
-          onChange={e => handleChange('nom', e.target.value)}
-          fullWidth
-        />
+        <TextField required label="Nom / référence" value={formData.nom}
+          onChange={e => handleChange('nom', e.target.value)} fullWidth sx={fieldSx} />
 
-        <FormControl fullWidth>
+        <FormControl fullWidth sx={fieldSx}>
           <InputLabel>Type de tissu</InputLabel>
           <Select value={formData.type} label="Type de tissu" onChange={e => handleChange('type', e.target.value)}>
             <MenuItem value=""><em>—</em></MenuItem>
@@ -95,69 +94,41 @@ function TissuForm({ tissu, onSave, onCancel }) {
           </Select>
         </FormControl>
 
-        <TextField
-          label="Couleur / motif"
-          value={formData.couleur}
-          onChange={e => handleChange('couleur', e.target.value)}
-          fullWidth
-        />
+        <TextField label="Couleur / motif" value={formData.couleur}
+          onChange={e => handleChange('couleur', e.target.value)} fullWidth sx={fieldSx} />
 
-        <TextField
-          label="Quantité en stock (mètres)"
-          type="number"
-          inputProps={{ min: 0, step: 0.1 }}
-          value={formData.quantite}
-          onChange={e => handleChange('quantite', e.target.value)}
-          fullWidth
-        />
+        <TextField label="Quantité en stock (mètres)" type="number" inputProps={{ min: 0, step: 0.1 }}
+          value={formData.quantite} onChange={e => handleChange('quantite', e.target.value)} fullWidth sx={fieldSx} />
 
-        <TextField
-          label="Provenance"
-          value={formData.provenance}
-          onChange={e => handleChange('provenance', e.target.value)}
-          fullWidth
-          placeholder="Ex: Tissus de la Lune, Etsy..."
-        />
+        <TextField label="Provenance" value={formData.provenance}
+          onChange={e => handleChange('provenance', e.target.value)} fullWidth
+          placeholder="Ex: Tissus de la Lune, Etsy..." sx={fieldSx} />
 
         {/* Image */}
         <Box>
-          <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>Photo du tissu</Typography>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-            {formData.image ? (
-              <Box sx={{ position: 'relative' }}>
-                <img src={formData.image} alt="Aperçu" style={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 8 }} />
-                <IconButton
-                  size="small"
-                  onClick={() => handleChange('image', '')}
-                  sx={{ position: 'absolute', top: -8, right: -8, bgcolor: 'white', boxShadow: 1 }}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </Box>
-            ) : (
-              <Button
-                variant="outlined"
-                startIcon={<ContentPasteIcon />}
-                onClick={handlePasteImage}
-                sx={{ borderColor: '#33658a', color: '#33658a' }}
-              >
-                Coller depuis le presse-papier
-              </Button>
-            )}
-          </Box>
+          <Typography variant="body2" sx={{ mb: 1, fontWeight: 700, color: 'text.secondary', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Photo du tissu
+          </Typography>
+          {formData.image ? (
+            <Box sx={{ position: 'relative', display: 'inline-block' }}>
+              <img src={formData.image} alt="Aperçu" style={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 8 }} />
+              <IconButton size="small" onClick={() => handleChange('image', '')}
+                sx={{ position: 'absolute', top: -8, right: -8, bgcolor: 'white', boxShadow: 1 }}>
+                <Trash2 size={14} strokeWidth={2} />
+              </IconButton>
+            </Box>
+          ) : (
+            <Button variant="outlined" startIcon={<Clipboard size={16} />} onClick={handlePasteImage}
+              sx={{ borderColor: '#33658a', color: '#33658a', fontWeight: 600, borderWidth: 2 }}>
+              Coller depuis le presse-papier
+            </Button>
+          )}
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
-          <Button
-            type="submit"
-            variant="contained"
-            size="large"
-            sx={{ bgcolor: '#33658a', '&:hover': { bgcolor: '#1e4d6b' } }}
-          >
-            {tissu ? '✨ Modifier' : '🧵 Ajouter'}
-          </Button>
-          <Button variant="outlined" size="large" onClick={onCancel}>
-            Annuler
+        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', pt: 1 }}>
+          <Button onClick={onCancel} sx={{ color: 'text.secondary' }}>Annuler</Button>
+          <Button type="submit" variant="contained" sx={{ bgcolor: '#33658a', '&:hover': { bgcolor: '#1e4d6b' }, fontWeight: 700 }}>
+            {tissu ? 'Modifier' : 'Ajouter'}
           </Button>
         </Box>
       </Box>

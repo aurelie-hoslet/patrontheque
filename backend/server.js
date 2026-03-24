@@ -1,45 +1,63 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
-const Patron = require('./models/Patron');
-const Tissu = require('./models/Tissu');
-const Projet = require('./models/Projet');
-const Dealer = require('./models/Dealer');
+const Datastore = require('@seald-io/nedb');
 
 const app = express();
 const PORT = 5000;
 
+// Répertoire de données : défini par Electron, ou local en dev
+const DATA_DIR = process.env.USER_DATA_PATH || path.join(__dirname, 'data');
+const PDF_DIR = path.join(__dirname, 'pdfs');
+
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(PDF_DIR)) fs.mkdirSync(PDF_DIR, { recursive: true });
+
+// NeDB datastores
+const patronsDb  = new Datastore({ filename: path.join(DATA_DIR, 'patrons.db'),     autoload: true });
+const tissusDb   = new Datastore({ filename: path.join(DATA_DIR, 'tissus.db'),      autoload: true });
+const projetsDb  = new Datastore({ filename: path.join(DATA_DIR, 'projets.db'),     autoload: true });
+const dealersDb  = new Datastore({ filename: path.join(DATA_DIR, 'dealers.db'),     autoload: true });
+const inspDb         = new Datastore({ filename: path.join(DATA_DIR, 'inspirations.db'),  autoload: true });
+const wishlistDb     = new Datastore({ filename: path.join(DATA_DIR, 'wishlist.db'),       autoload: true });
+const mensurationsDb = new Datastore({ filename: path.join(DATA_DIR, 'mensurations.db'),   autoload: true });
+
 app.use(cors());
 app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ limit: '200mb', extended: true }));
-app.use('/pdfs', express.static(path.join(__dirname, 'pdfs')));
+app.use('/pdfs', express.static(PDF_DIR));
 
-const MONGODB_URI = 'mongodb://localhost:27017/patron-manager';
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 const capFirst = s => s && typeof s === 'string' ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 const capArray = arr => Array.isArray(arr) ? arr.map(capFirst) : arr;
+const sanitizeName = s => (s || '').replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, '-').slice(0, 80);
 
-const sanitizeName = (s) => (s || '').replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, '-').slice(0, 80);
+const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const copyPdfs = (sourcePath, marque, modele) => {
-  const destDir = path.join(__dirname, 'pdfs', sanitizeName(marque), sanitizeName(modele));
-  if (!fs.existsSync(sourcePath)) throw new Error(`Dossier source introuvable : ${sourcePath}`);
-  if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
-  const files = fs.readdirSync(sourcePath).filter(f => f.toLowerCase().endsWith('.pdf'));
-  files.forEach(f => fs.copyFileSync(path.join(sourcePath, f), path.join(destDir, f)));
-  return { pdfPath: `pdfs/${sanitizeName(marque)}/${sanitizeName(modele)}`, count: files.length };
+const sortDocs = (docs, field, order = -1) => {
+  return docs.sort((a, b) => {
+    const va = a[field] ? new Date(a[field]).getTime() : 0;
+    const vb = b[field] ? new Date(b[field]).getTime() : 0;
+    return order === -1 ? vb - va : va - vb;
+  });
 };
 
-mongoose.connect(MONGODB_URI)
-  .then(() => console.log('✅ Connecté à MongoDB'))
-  .catch(err => console.error('❌ Erreur MongoDB:', err));
+const sortDocsString = (docs, field, order = 1) => {
+  return docs.sort((a, b) => {
+    const va = (a[field] || '').toString().toLowerCase();
+    const vb = (b[field] || '').toString().toLowerCase();
+    return order === 1 ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+};
+
+// ── PATRONS ──────────────────────────────────────────────────────────────────
 
 app.get('/api/patrons', async (req, res) => {
   try {
-    const patrons = await Patron.find().sort({ dateModification: -1 });
-    res.json(patrons);
+    const patrons = await patronsDb.findAsync({});
+    res.json(sortDocs(patrons, 'dateModification'));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -47,7 +65,7 @@ app.get('/api/patrons', async (req, res) => {
 
 app.get('/api/patrons/:id', async (req, res) => {
   try {
-    const patron = await Patron.findById(req.params.id);
+    const patron = await patronsDb.findOneAsync({ _id: req.params.id });
     if (!patron) return res.status(404).json({ message: 'Patron non trouvé' });
     res.json(patron);
   } catch (error) {
@@ -58,24 +76,33 @@ app.get('/api/patrons/:id', async (req, res) => {
 app.post('/api/patrons', async (req, res) => {
   try {
     const { pdfFiles, ...rest } = req.body;
-    const body = { ...rest, details: capArray(rest.details), tissuSpecifique: capArray(rest.tissuSpecifique), typeAccessoires: capArray(rest.typeAccessoires) };
-    const patron = new Patron(body);
+    const now = new Date();
+    const doc = {
+      ...rest,
+      details: capArray(rest.details),
+      tissuSpecifique: capArray(rest.tissuSpecifique),
+      typeAccessoires: capArray(rest.typeAccessoires),
+      dateAjout: now,
+      dateModification: now,
+    };
+
     if (pdfFiles && pdfFiles.length > 0) {
       try {
-        const destDir = path.join(__dirname, 'pdfs', sanitizeName(patron.marque), sanitizeName(patron.modele));
+        const destDir = path.join(PDF_DIR, sanitizeName(doc.marque), sanitizeName(doc.modele));
         if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
         pdfFiles.forEach(({ name, data }) => {
           const finalName = name.replace(/\.pdf$/i, '') + '.pdf';
           const buf = Buffer.from(data.replace(/^data:.*?;base64,/, ''), 'base64');
           fs.writeFileSync(path.join(destDir, finalName), buf);
         });
-        patron.pdfPath = `pdfs/${sanitizeName(patron.marque)}/${sanitizeName(patron.modele)}`;
+        doc.pdfPath = `pdfs/${sanitizeName(doc.marque)}/${sanitizeName(doc.modele)}`;
       } catch (e) {
         console.warn('Écriture PDFs échouée:', e.message);
       }
     }
-    const nouveauPatron = await patron.save();
-    res.status(201).json(nouveauPatron);
+
+    const nouveau = await patronsDb.insertAsync(doc);
+    res.status(201).json(nouveau);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -84,22 +111,32 @@ app.post('/api/patrons', async (req, res) => {
 app.put('/api/patrons/:id', async (req, res) => {
   try {
     const { pdfFiles, ...rest } = req.body;
-    const body = { ...rest, details: capArray(rest.details), tissuSpecifique: capArray(rest.tissuSpecifique), typeAccessoires: capArray(rest.typeAccessoires), dateModification: new Date() };
+    const update = {
+      ...rest,
+      details: capArray(rest.details),
+      tissuSpecifique: capArray(rest.tissuSpecifique),
+      typeAccessoires: capArray(rest.typeAccessoires),
+      dateModification: new Date(),
+    };
+
     if (pdfFiles && pdfFiles.length > 0) {
       try {
-        const destDir = path.join(__dirname, 'pdfs', sanitizeName(body.marque), sanitizeName(body.modele));
+        const destDir = path.join(PDF_DIR, sanitizeName(update.marque), sanitizeName(update.modele));
         if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
         pdfFiles.forEach(({ name, data }) => {
           const finalName = name.replace(/\.pdf$/i, '') + '.pdf';
           const buf = Buffer.from(data.replace(/^data:.*?;base64,/, ''), 'base64');
           fs.writeFileSync(path.join(destDir, finalName), buf);
         });
-        body.pdfPath = `pdfs/${sanitizeName(body.marque)}/${sanitizeName(body.modele)}`;
+        update.pdfPath = `pdfs/${sanitizeName(update.marque)}/${sanitizeName(update.modele)}`;
       } catch (e) {
         console.warn('Écriture PDFs échouée:', e.message);
       }
     }
-    const patron = await Patron.findByIdAndUpdate(req.params.id, body, { new: true, runValidators: true });
+
+    delete update._id;
+    await patronsDb.updateAsync({ _id: req.params.id }, { $set: update });
+    const patron = await patronsDb.findOneAsync({ _id: req.params.id });
     if (!patron) return res.status(404).json({ message: 'Patron non trouvé' });
     res.json(patron);
   } catch (error) {
@@ -109,11 +146,8 @@ app.put('/api/patrons/:id', async (req, res) => {
 
 app.patch('/api/patrons/:id/aRevoir', async (req, res) => {
   try {
-    const patron = await Patron.findByIdAndUpdate(
-      req.params.id,
-      { aRevoir: req.body.aRevoir, dateModification: new Date() },
-      { new: true }
-    );
+    await patronsDb.updateAsync({ _id: req.params.id }, { $set: { aRevoir: req.body.aRevoir, dateModification: new Date() } });
+    const patron = await patronsDb.findOneAsync({ _id: req.params.id });
     if (!patron) return res.status(404).json({ message: 'Patron non trouvé' });
     res.json(patron);
   } catch (error) {
@@ -123,11 +157,8 @@ app.patch('/api/patrons/:id/aRevoir', async (req, res) => {
 
 app.patch('/api/patrons/:id/favori', async (req, res) => {
   try {
-    const patron = await Patron.findByIdAndUpdate(
-      req.params.id,
-      { favori: req.body.favori, dateModification: new Date() },
-      { new: true }
-    );
+    await patronsDb.updateAsync({ _id: req.params.id }, { $set: { favori: req.body.favori, dateModification: new Date() } });
+    const patron = await patronsDb.findOneAsync({ _id: req.params.id });
     if (!patron) return res.status(404).json({ message: 'Patron non trouvé' });
     res.json(patron);
   } catch (error) {
@@ -137,11 +168,8 @@ app.patch('/api/patrons/:id/favori', async (req, res) => {
 
 app.patch('/api/patrons/:id/complet', async (req, res) => {
   try {
-    const patron = await Patron.findByIdAndUpdate(
-      req.params.id,
-      { complet: req.body.complet, dateModification: new Date() },
-      { new: true }
-    );
+    await patronsDb.updateAsync({ _id: req.params.id }, { $set: { complet: req.body.complet, dateModification: new Date() } });
+    const patron = await patronsDb.findOneAsync({ _id: req.params.id });
     if (!patron) return res.status(404).json({ message: 'Patron non trouvé' });
     res.json(patron);
   } catch (error) {
@@ -151,7 +179,7 @@ app.patch('/api/patrons/:id/complet', async (req, res) => {
 
 app.get('/api/patrons/:id/pdfs', async (req, res) => {
   try {
-    const patron = await Patron.findById(req.params.id);
+    const patron = await patronsDb.findOneAsync({ _id: req.params.id });
     if (!patron || !patron.pdfPath) return res.json([]);
     const dir = path.join(__dirname, patron.pdfPath);
     if (!fs.existsSync(dir)) return res.json([]);
@@ -165,14 +193,14 @@ app.get('/api/patrons/:id/pdfs', async (req, res) => {
 
 app.delete('/api/patrons/:id/pdfs/:filename', async (req, res) => {
   try {
-    const patron = await Patron.findById(req.params.id);
+    const patron = await patronsDb.findOneAsync({ _id: req.params.id });
     if (!patron || !patron.pdfPath) return res.status(404).json({ message: 'Patron ou PDF non trouvé' });
     const filePath = path.join(__dirname, patron.pdfPath, req.params.filename);
     if (!fs.existsSync(filePath)) return res.status(404).json({ message: 'Fichier non trouvé' });
     fs.unlinkSync(filePath);
     const remaining = fs.readdirSync(path.join(__dirname, patron.pdfPath)).filter(f => f.toLowerCase().endsWith('.pdf'));
     if (remaining.length === 0) {
-      await Patron.findByIdAndUpdate(req.params.id, { pdfPath: null });
+      await patronsDb.updateAsync({ _id: req.params.id }, { $set: { pdfPath: null } });
     }
     res.json({ message: 'PDF supprimé' });
   } catch (error) {
@@ -182,8 +210,8 @@ app.delete('/api/patrons/:id/pdfs/:filename', async (req, res) => {
 
 app.delete('/api/patrons/:id', async (req, res) => {
   try {
-    const patron = await Patron.findByIdAndDelete(req.params.id);
-    if (!patron) return res.status(404).json({ message: 'Patron non trouvé' });
+    const numRemoved = await patronsDb.removeAsync({ _id: req.params.id }, {});
+    if (numRemoved === 0) return res.status(404).json({ message: 'Patron non trouvé' });
     res.json({ message: 'Patron supprimé avec succès' });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -193,10 +221,12 @@ app.delete('/api/patrons/:id', async (req, res) => {
 app.post('/api/patrons/search', async (req, res) => {
   try {
     const filters = req.body;
-    let query = {};
-    
+    const query = {};
+    const andClauses = [];
+
     if (filters.searchText) {
-      query.$text = { $search: filters.searchText };
+      const regex = new RegExp(escapeRegex(filters.searchText), 'i');
+      andClauses.push({ $or: [{ marque: regex }, { modele: regex }, { notes: regex }] });
     }
     if (filters.genres && filters.genres.length > 0) {
       query.genres = { $in: filters.genres };
@@ -205,10 +235,10 @@ app.post('/api/patrons/search', async (req, res) => {
       query.types = { $in: filters.types };
     }
     if (filters.typeAccessoires && filters.typeAccessoires.length > 0) {
-      query.$or = [
+      andClauses.push({ $or: [
         { typeAccessoires: { $in: filters.typeAccessoires } },
         { typeAccessoire: { $in: filters.typeAccessoires } }
-      ];
+      ]});
     }
     if (filters.manches && filters.manches.length > 0) {
       query.manches = { $in: filters.manches };
@@ -240,17 +270,19 @@ app.post('/api/patrons/search', async (req, res) => {
       if (filters.formats.a0) query['formats.a0'] = true;
     }
     if (filters.metrageRanges && filters.metrageRanges.length > 0) {
-      query.$or = filters.metrageRanges.map(r => ({
+      andClauses.push({ $or: filters.metrageRanges.map(r => ({
         metrageMin: { $lte: r.max },
         metrageMax: { $gte: r.min }
-      }));
+      }))});
     }
     if (filters.cousu !== undefined) {
       query.cousu = filters.cousu;
     }
-    
-    const patrons = await Patron.find(query).sort({ dateModification: -1 });
-    res.json(patrons);
+
+    if (andClauses.length > 0) query.$and = andClauses;
+
+    const patrons = await patronsDb.findAsync(query);
+    res.json(sortDocs(patrons, 'dateModification'));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -259,15 +291,14 @@ app.post('/api/patrons/search', async (req, res) => {
 app.post('/api/import', async (req, res) => {
   try {
     const { patrons } = req.body;
-    if (!Array.isArray(patrons)) {
-      return res.status(400).json({ message: 'Format invalide' });
-    }
-    
+    if (!Array.isArray(patrons)) return res.status(400).json({ message: 'Format invalide' });
+
     const results = { success: 0, errors: [] };
-    
+    const now = new Date();
+
     for (const patronData of patrons) {
       try {
-        const migratedData = {
+        const doc = {
           marque: patronData.marque,
           modele: patronData.modele,
           genres: patronData.genres || (patronData.genre ? [patronData.genre] : []),
@@ -294,17 +325,16 @@ app.post('/api/import', async (req, res) => {
           lienShop: patronData.lienShop || '',
           imagePrincipale: '',
           imageTableauTailles: '',
-          imageSchemaTechnique: ''
+          imageSchemaTechnique: '',
+          dateAjout: now,
+          dateModification: now,
         };
-        
-        const patron = new Patron(migratedData);
-        await patron.save();
+        await patronsDb.insertAsync(doc);
         results.success++;
       } catch (error) {
         results.errors.push({ patron: patronData.modele, error: error.message });
       }
     }
-    
     res.json(results);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -313,7 +343,7 @@ app.post('/api/import', async (req, res) => {
 
 app.get('/api/stats/filter-options', async (req, res) => {
   try {
-    const patrons = await Patron.find();
+    const patrons = await patronsDb.findAsync({});
     const options = {
       marques: [...new Set(patrons.map(p => p.marque).filter(Boolean))].sort(),
       genres: [...new Set(patrons.flatMap(p => p.genres || []))].sort(),
@@ -361,12 +391,12 @@ app.get('/api/stats/filter-options', async (req, res) => {
   }
 });
 
-// ── TISSUS ──────────────────────────────────────────────────────────────────
+// ── TISSUS ───────────────────────────────────────────────────────────────────
 
 app.get('/api/tissus', async (req, res) => {
   try {
-    const tissus = await Tissu.find().sort({ dateAjout: -1 });
-    res.json(tissus);
+    const tissus = await tissusDb.findAsync({});
+    res.json(sortDocs(tissus, 'dateAjout'));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -374,8 +404,8 @@ app.get('/api/tissus', async (req, res) => {
 
 app.post('/api/tissus', async (req, res) => {
   try {
-    const tissu = new Tissu(req.body);
-    const nouveau = await tissu.save();
+    const doc = { ...req.body, dateAjout: new Date() };
+    const nouveau = await tissusDb.insertAsync(doc);
     res.status(201).json(nouveau);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -384,7 +414,10 @@ app.post('/api/tissus', async (req, res) => {
 
 app.put('/api/tissus/:id', async (req, res) => {
   try {
-    const tissu = await Tissu.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const update = { ...req.body };
+    delete update._id;
+    await tissusDb.updateAsync({ _id: req.params.id }, { $set: update });
+    const tissu = await tissusDb.findOneAsync({ _id: req.params.id });
     if (!tissu) return res.status(404).json({ message: 'Tissu non trouvé' });
     res.json(tissu);
   } catch (error) {
@@ -394,8 +427,8 @@ app.put('/api/tissus/:id', async (req, res) => {
 
 app.delete('/api/tissus/:id', async (req, res) => {
   try {
-    const tissu = await Tissu.findByIdAndDelete(req.params.id);
-    if (!tissu) return res.status(404).json({ message: 'Tissu non trouvé' });
+    const numRemoved = await tissusDb.removeAsync({ _id: req.params.id }, {});
+    if (numRemoved === 0) return res.status(404).json({ message: 'Tissu non trouvé' });
     res.json({ message: 'Tissu supprimé' });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -406,8 +439,8 @@ app.delete('/api/tissus/:id', async (req, res) => {
 
 app.get('/api/projets', async (req, res) => {
   try {
-    const projets = await Projet.find().sort({ dateCreation: -1 });
-    res.json(projets);
+    const projets = await projetsDb.findAsync({});
+    res.json(sortDocs(projets, 'dateCreation'));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -415,8 +448,8 @@ app.get('/api/projets', async (req, res) => {
 
 app.post('/api/projets', async (req, res) => {
   try {
-    const projet = new Projet(req.body);
-    const nouveau = await projet.save();
+    const doc = { ...req.body, dateCreation: new Date() };
+    const nouveau = await projetsDb.insertAsync(doc);
     res.status(201).json(nouveau);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -425,7 +458,10 @@ app.post('/api/projets', async (req, res) => {
 
 app.put('/api/projets/:id', async (req, res) => {
   try {
-    const projet = await Projet.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const update = { ...req.body };
+    delete update._id;
+    await projetsDb.updateAsync({ _id: req.params.id }, { $set: update });
+    const projet = await projetsDb.findOneAsync({ _id: req.params.id });
     if (!projet) return res.status(404).json({ message: 'Projet non trouvé' });
     res.json(projet);
   } catch (error) {
@@ -435,8 +471,8 @@ app.put('/api/projets/:id', async (req, res) => {
 
 app.delete('/api/projets/:id', async (req, res) => {
   try {
-    const projet = await Projet.findByIdAndDelete(req.params.id);
-    if (!projet) return res.status(404).json({ message: 'Projet non trouvé' });
+    const numRemoved = await projetsDb.removeAsync({ _id: req.params.id }, {});
+    if (numRemoved === 0) return res.status(404).json({ message: 'Projet non trouvé' });
     res.json({ message: 'Projet supprimé' });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -445,13 +481,14 @@ app.delete('/api/projets/:id', async (req, res) => {
 
 app.patch('/api/projets/:id/etape/:etapeIndex', async (req, res) => {
   try {
-    const projet = await Projet.findById(req.params.id);
+    const projet = await projetsDb.findOneAsync({ _id: req.params.id });
     if (!projet) return res.status(404).json({ message: 'Projet non trouvé' });
     const idx = parseInt(req.params.etapeIndex);
-    if (projet.etapes[idx] === undefined) return res.status(404).json({ message: 'Étape non trouvée' });
+    if (!projet.etapes || projet.etapes[idx] === undefined) return res.status(404).json({ message: 'Étape non trouvée' });
     projet.etapes[idx].faite = req.body.faite;
-    await projet.save();
-    res.json(projet);
+    await projetsDb.updateAsync({ _id: req.params.id }, { $set: { etapes: projet.etapes } });
+    const updated = await projetsDb.findOneAsync({ _id: req.params.id });
+    res.json(updated);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -459,11 +496,8 @@ app.patch('/api/projets/:id/etape/:etapeIndex', async (req, res) => {
 
 app.patch('/api/projets/:id/statut', async (req, res) => {
   try {
-    const projet = await Projet.findByIdAndUpdate(
-      req.params.id,
-      { statut: req.body.statut },
-      { new: true }
-    );
+    await projetsDb.updateAsync({ _id: req.params.id }, { $set: { statut: req.body.statut } });
+    const projet = await projetsDb.findOneAsync({ _id: req.params.id });
     if (!projet) return res.status(404).json({ message: 'Projet non trouvé' });
     res.json(projet);
   } catch (error) {
@@ -473,11 +507,8 @@ app.patch('/api/projets/:id/statut', async (req, res) => {
 
 app.patch('/api/projets/:id/imagePosition', async (req, res) => {
   try {
-    const projet = await Projet.findByIdAndUpdate(
-      req.params.id,
-      { imagePosition: req.body.imagePosition },
-      { new: true }
-    );
+    await projetsDb.updateAsync({ _id: req.params.id }, { $set: { imagePosition: req.body.imagePosition } });
+    const projet = await projetsDb.findOneAsync({ _id: req.params.id });
     if (!projet) return res.status(404).json({ message: 'Projet non trouvé' });
     res.json(projet);
   } catch (error) {
@@ -489,8 +520,8 @@ app.patch('/api/projets/:id/imagePosition', async (req, res) => {
 
 app.get('/api/dealers', async (req, res) => {
   try {
-    const dealers = await Dealer.find().sort({ categorie: 1, nom: 1 });
-    res.json(dealers);
+    const dealers = await dealersDb.findAsync({});
+    res.json(sortDocsString(dealers, 'nom'));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -498,8 +529,8 @@ app.get('/api/dealers', async (req, res) => {
 
 app.post('/api/dealers', async (req, res) => {
   try {
-    const dealer = new Dealer(req.body);
-    const nouveau = await dealer.save();
+    const doc = { ...req.body, dateAjout: new Date() };
+    const nouveau = await dealersDb.insertAsync(doc);
     res.status(201).json(nouveau);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -508,7 +539,10 @@ app.post('/api/dealers', async (req, res) => {
 
 app.put('/api/dealers/:id', async (req, res) => {
   try {
-    const dealer = await Dealer.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const update = { ...req.body };
+    delete update._id;
+    await dealersDb.updateAsync({ _id: req.params.id }, { $set: update });
+    const dealer = await dealersDb.findOneAsync({ _id: req.params.id });
     if (!dealer) return res.status(404).json({ message: 'Dealer non trouvé' });
     res.json(dealer);
   } catch (error) {
@@ -518,14 +552,173 @@ app.put('/api/dealers/:id', async (req, res) => {
 
 app.delete('/api/dealers/:id', async (req, res) => {
   try {
-    const dealer = await Dealer.findByIdAndDelete(req.params.id);
-    if (!dealer) return res.status(404).json({ message: 'Dealer non trouvé' });
+    const numRemoved = await dealersDb.removeAsync({ _id: req.params.id }, {});
+    if (numRemoved === 0) return res.status(404).json({ message: 'Dealer non trouvé' });
     res.json({ message: 'Dealer supprimé' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
+// ── INSPIRATIONS ─────────────────────────────────────────────────────────────
+
+app.get('/api/inspirations', async (req, res) => {
+  try {
+    const inspirations = await inspDb.findAsync({});
+    res.json(sortDocs(inspirations, 'dateAjout'));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/inspirations', async (req, res) => {
+  try {
+    const doc = { ...req.body, dateAjout: new Date() };
+    const nouveau = await inspDb.insertAsync(doc);
+    res.status(201).json(nouveau);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+app.put('/api/inspirations/:id', async (req, res) => {
+  try {
+    const update = { ...req.body };
+    delete update._id;
+    await inspDb.updateAsync({ _id: req.params.id }, { $set: update });
+    const inspiration = await inspDb.findOneAsync({ _id: req.params.id });
+    if (!inspiration) return res.status(404).json({ message: 'Inspiration non trouvée' });
+    res.json(inspiration);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+app.patch('/api/inspirations/:id/imagePosition', async (req, res) => {
+  try {
+    await inspDb.updateAsync({ _id: req.params.id }, { $set: { imagePosition: req.body.imagePosition } });
+    const inspiration = await inspDb.findOneAsync({ _id: req.params.id });
+    if (!inspiration) return res.status(404).json({ message: 'Inspiration non trouvée' });
+    res.json(inspiration);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.delete('/api/inspirations/:id', async (req, res) => {
+  try {
+    const numRemoved = await inspDb.removeAsync({ _id: req.params.id }, {});
+    if (numRemoved === 0) return res.status(404).json({ message: 'Inspiration non trouvée' });
+    res.json({ message: 'Inspiration supprimée' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ── WISH LIST ────────────────────────────────────────────────────────────────
+
+app.get('/api/wishlist', async (req, res) => {
+  try {
+    const items = await wishlistDb.findAsync({});
+    res.json(sortDocs(items, 'dateAjout'));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/wishlist', async (req, res) => {
+  try {
+    const doc = { ...req.body, dateAjout: new Date() };
+    const nouveau = await wishlistDb.insertAsync(doc);
+    res.status(201).json(nouveau);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+app.put('/api/wishlist/:id', async (req, res) => {
+  try {
+    const update = { ...req.body };
+    delete update._id;
+    await wishlistDb.updateAsync({ _id: req.params.id }, { $set: update });
+    const item = await wishlistDb.findOneAsync({ _id: req.params.id });
+    if (!item) return res.status(404).json({ message: 'Item non trouvé' });
+    res.json(item);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+app.delete('/api/wishlist/:id', async (req, res) => {
+  try {
+    const numRemoved = await wishlistDb.removeAsync({ _id: req.params.id }, {});
+    if (numRemoved === 0) return res.status(404).json({ message: 'Item non trouvé' });
+    res.json({ message: 'Item supprimé' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ── MENSURATIONS ──────────────────────────────────────────────────────────────
+
+app.get('/api/mensurations', async (req, res) => {
+  try {
+    const docs = await mensurationsDb.findAsync({});
+    res.json(sortDocsString(docs, 'nom'));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/mensurations', async (req, res) => {
+  try {
+    const doc = await mensurationsDb.insertAsync({
+      ...req.body,
+      dateCreation: new Date().toISOString(),
+    });
+    res.status(201).json(doc);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.put('/api/mensurations/:id', async (req, res) => {
+  try {
+    const update = { ...req.body };
+    delete update._id;
+    await mensurationsDb.updateAsync({ _id: req.params.id }, { $set: update }, {});
+    const updated = await mensurationsDb.findOneAsync({ _id: req.params.id });
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.delete('/api/mensurations/:id', async (req, res) => {
+  try {
+    const numRemoved = await mensurationsDb.removeAsync({ _id: req.params.id }, {});
+    if (numRemoved === 0) return res.status(404).json({ message: 'Profil non trouvé' });
+    res.json({ message: 'Profil supprimé' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ── Frontend build (production Electron) ─────────────────────────────────────
+
+if (process.env.NODE_ENV === 'production') {
+  const frontendBuildPath = path.join(__dirname, '../frontend/build');
+  if (fs.existsSync(frontendBuildPath)) {
+    app.use(express.static(frontendBuildPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(frontendBuildPath, 'index.html'));
+    });
+  }
+}
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+
 app.listen(PORT, () => {
   console.log('🚀 Serveur démarré sur http://localhost:' + PORT);
+  console.log('📁 Données stockées dans :', DATA_DIR);
 });
