@@ -1,11 +1,21 @@
 const { app, BrowserWindow, shell } = require('electron')
 const path = require('path')
 const http = require('http')
+const net = require('net')
 
 const isDev = process.env.ELECTRON_DEV === 'true'
 const PORT = 5000
 
 let mainWindow
+
+function isPortInUse(port) {
+  return new Promise((resolve) => {
+    const tester = net.createServer()
+    tester.once('error', () => resolve(true))
+    tester.once('listening', () => { tester.close(); resolve(false) })
+    tester.listen(port, '127.0.0.1')
+  })
+}
 
 function waitForServer(url, retries, delay, callback) {
   http.get(url, () => callback()).on('error', () => {
@@ -14,10 +24,13 @@ function waitForServer(url, retries, delay, callback) {
   })
 }
 
-function startBackend() {
+async function startBackend() {
   process.env.USER_DATA_PATH = app.getPath('userData')
   if (!isDev) process.env.NODE_ENV = 'production'
-  require(path.join(__dirname, '../backend/server.js'))
+  const inUse = await isPortInUse(PORT)
+  if (!inUse) {
+    require(path.join(__dirname, '../backend/server.js'))
+  }
 }
 
 function createWindow() {
@@ -55,8 +68,8 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null })
 }
 
-app.whenReady().then(() => {
-  startBackend()
+app.whenReady().then(async () => {
+  await startBackend()
   createWindow()
 })
 
