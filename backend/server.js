@@ -9,7 +9,9 @@ const PORT = 5000;
 
 // Répertoire de données : défini par Electron, ou local en dev
 const DATA_DIR = process.env.USER_DATA_PATH || path.join(__dirname, 'data');
-const PDF_DIR = path.join(__dirname, 'pdfs');
+const PDF_DIR = process.env.USER_DATA_PATH
+  ? path.join(process.env.USER_DATA_PATH, 'pdfs')
+  : path.join(__dirname, 'pdfs');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(PDF_DIR)) fs.mkdirSync(PDF_DIR, { recursive: true });
@@ -891,4 +893,10 @@ if (process.env.NODE_ENV === 'production') {
 app.listen(PORT, () => {
   console.log('🚀 Serveur démarré sur http://localhost:' + PORT);
   console.log('📁 Données stockées dans :', DATA_DIR);
+}).on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.log('⚠️ Port ' + PORT + ' déjà utilisé, connexion au serveur existant.');
+  } else {
+    console.error('❌ Erreur serveur :', err.message);
+  }
 });
