@@ -69,7 +69,11 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  await startBackend()
+  try {
+    await startBackend()
+  } catch (err) {
+    console.error('Erreur démarrage backend:', err)
+  }
   createWindow()
 })
 
