@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+
 import {
   Box, TextField, Select, MenuItem, FormControl, InputLabel,
   Button, Typography, Paper, IconButton
@@ -8,7 +9,7 @@ import { tissuService } from '../services/api';
 
 const TYPES_TISSU = ['Chaîne et trame', 'Maille', 'Dentelle', 'Cuir', 'Autre'];
 
-const defaultForm = { nom: '', type: '', couleur: '', quantite: '', provenance: '', image: '' };
+const defaultForm = { nom: '', type: '', couleur: '', quantite: '', provenance: '', lien: '', image: '' };
 
 const fieldSx = {
   '& .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: '#e8e3dd' },
@@ -20,6 +21,7 @@ const fieldSx = {
 
 function TissuForm({ tissu, onSave, onCancel }) {
   const [formData, setFormData] = useState(defaultForm);
+  const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
     setFormData(tissu ? {
@@ -28,31 +30,41 @@ function TissuForm({ tissu, onSave, onCancel }) {
       couleur: tissu.couleur || '',
       quantite: tissu.quantite !== undefined ? tissu.quantite : '',
       provenance: tissu.provenance || '',
+      lien: tissu.lien || '',
       image: tissu.image || ''
     } : defaultForm);
   }, [tissu]);
 
   const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
 
+  const loadImageFile = (file) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onloadend = () => handleChange('image', reader.result);
+    reader.readAsDataURL(file);
+  };
+
   const handlePasteImage = async () => {
     try {
       const items = await navigator.clipboard.read();
       for (const item of items) {
-        for (const type of item.types) {
-          if (type.startsWith('image/')) {
-            const blob = await item.getType(type);
-            const reader = new FileReader();
-            reader.onloadend = () => handleChange('image', reader.result);
-            reader.readAsDataURL(blob);
-            return;
-          }
-        }
+        const imageType = item.types.find(t => t.startsWith('image/'));
+        if (imageType) { loadImageFile(await item.getType(imageType)); return; }
       }
-      alert("Pas d'image dans le presse-papier");
-    } catch {
-      alert("Erreur : copiez d'abord une image avec Ctrl+C");
-    }
+    } catch { console.error('Impossible de lire le presse-papiers'); }
   };
+
+  useEffect(() => {
+    const handlePaste = (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) { loadImageFile(item.getAsFile()); return; }
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -104,6 +116,10 @@ function TissuForm({ tissu, onSave, onCancel }) {
           onChange={e => handleChange('provenance', e.target.value)} fullWidth
           placeholder="Ex: Tissus de la Lune, Etsy..." sx={fieldSx} />
 
+        <TextField label="Lien produit" value={formData.lien}
+          onChange={e => handleChange('lien', e.target.value)} fullWidth
+          placeholder="https://..." sx={fieldSx} />
+
         {/* Image */}
         <Box>
           <Typography variant="body2" sx={{ mb: 1, fontWeight: 700, color: 'text.secondary', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -118,10 +134,30 @@ function TissuForm({ tissu, onSave, onCancel }) {
               </IconButton>
             </Box>
           ) : (
-            <Button variant="outlined" startIcon={<Clipboard size={16} />} onClick={handlePasteImage}
-              sx={{ borderColor: '#33658a', color: '#33658a', fontWeight: 600, borderWidth: 2 }}>
-              Coller depuis le presse-papier
-            </Button>
+            <Box
+              onDragOver={e => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={e => { e.preventDefault(); setDragging(false); loadImageFile(e.dataTransfer.files[0]); }}
+              onClick={() => document.getElementById('tissu-file-input').click()}
+              sx={{
+                border: `2px dashed ${dragging ? '#33658a' : '#e8e3dd'}`,
+                borderRadius: 2, p: 2.5, textAlign: 'center', cursor: 'pointer',
+                bgcolor: dragging ? '#e3eef7' : 'transparent',
+                transition: 'all 0.15s',
+                '&:hover': { borderColor: '#33658a', bgcolor: '#f0f6fa' }
+              }}
+            >
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: '0.85rem' }}>
+                Glisser-déposer ou cliquer pour parcourir
+              </Typography>
+              <Button size="small" variant="outlined" startIcon={<Clipboard size={14} />}
+                onClick={e => { e.stopPropagation(); handlePasteImage(); }}
+                sx={{ borderColor: '#33658a', color: '#33658a', fontWeight: 600, borderWidth: 2 }}>
+                Coller une image
+              </Button>
+              <input id="tissu-file-input" type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={e => loadImageFile(e.target.files[0])} />
+            </Box>
           )}
         </Box>
 

@@ -30,6 +30,8 @@ export const projetService = {
   update: (id, projet) => axios.put(`${API_URL}/projets/${id}`, projet),
   delete: (id) => axios.delete(`${API_URL}/projets/${id}`),
   setEtape: (id, etapeIndex, faite) => axios.patch(`${API_URL}/projets/${id}/etape/${etapeIndex}`, { faite }),
+  setEtapes: (id, etapes) => axios.patch(`${API_URL}/projets/${id}/etapes`, { etapes }),
+  getEtapesSuggestions: () => axios.get(`${API_URL}/projets/etapes-suggestions`),
   setStatut: (id, statut) => axios.patch(`${API_URL}/projets/${id}/statut`, { statut }),
   setImagePosition: (id, imagePosition) => axios.patch(`${API_URL}/projets/${id}/imagePosition`, { imagePosition })
 };
@@ -54,6 +56,10 @@ export const wishlistService = {
   create: (item) => axios.post(`${API_URL}/wishlist`, item),
   update: (id, item) => axios.put(`${API_URL}/wishlist/${id}`, item),
   delete: (id) => axios.delete(`${API_URL}/wishlist/${id}`)
+};
+
+export const ogService = {
+  preview: (url) => axios.get(`${API_URL}/og-preview`, { params: { url } }),
 };
 
 export const mensurationsService = {

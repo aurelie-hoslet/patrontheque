@@ -2,13 +2,55 @@ import React, { useState, useEffect } from 'react';
 import {
   Box, TextField, Select, MenuItem, FormControl, InputLabel,
   Button, Typography, Paper, IconButton, Checkbox,
-  List, ListItem, ListItemText
+  LinearProgress, Autocomplete, RadioGroup, FormControlLabel, Radio
 } from '@mui/material';
-import { ClipboardList, Plus, Trash2, Clipboard, Pencil } from 'lucide-react';
+import { ClipboardList, Plus, Trash2, Clipboard, Pencil, GripVertical } from 'lucide-react';
+import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { projetService } from '../services/api';
 
+const ETAPES_TEMPLATE = [
+  'Préparation du patron',
+  'Tissu lavé et repassé',
+  'Préparation de la mercerie',
+  'Découpage du tissu',
+  'Assemblage',
+  'Finitions',
+];
+
+const genId = () => `e_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+function SortableEtape({ etape, onToggle, onDelete }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: etape.id });
+  return (
+    <Box
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+      sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, py: 0.25, borderRadius: 1,
+        bgcolor: isDragging ? 'rgba(51,101,138,0.08)' : 'transparent' }}
+    >
+      <Box {...attributes} {...listeners}
+        sx={{ cursor: 'grab', color: 'text.disabled', display: 'flex', alignItems: 'center', '&:active': { cursor: 'grabbing' } }}>
+        <GripVertical size={14} strokeWidth={2} />
+      </Box>
+      <Checkbox checked={etape.faite} onChange={onToggle} size="small"
+        sx={{ p: 0.25, color: '#0cbaba', '&.Mui-checked': { color: '#0cbaba' } }} />
+      <Typography variant="body2" sx={{ flex: 1, fontSize: '0.88rem',
+        textDecoration: etape.faite ? 'line-through' : 'none',
+        color: etape.faite ? 'text.disabled' : 'inherit' }}>
+        {etape.titre}
+      </Typography>
+      <IconButton size="small" onClick={onDelete}
+        sx={{ color: 'rgba(232,93,117,0.5)', '&:hover': { color: '#e85d75' }, p: 0.25 }}>
+        <Trash2 size={13} strokeWidth={2} />
+      </IconButton>
+    </Box>
+  );
+}
+
 const defaultForm = {
-  nom: '', patronId: '', tissuId: '', statut: 'En cours',
+  nom: '', patronId: '', tissuId: '', statut: 'Idée',
   notes: '', image: '', dateDebut: '', dateFin: '', etapes: []
 };
 
@@ -22,7 +64,20 @@ const fieldSx = {
 
 function ProjetForm({ projet, patrons, tissus, onSave, onCancel }) {
   const [formData, setFormData] = useState(defaultForm);
-  const [nouvelleEtape, setNouvelleEtape] = useState('');
+  const [newEtape, setNewEtape] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [dragging, setDragging] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  useEffect(() => {
+    projetService.getEtapesSuggestions()
+      .then(res => setSuggestions(res.data))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (projet) {
@@ -35,49 +90,65 @@ function ProjetForm({ projet, patrons, tissus, onSave, onCancel }) {
         image: projet.image || '',
         dateDebut: projet.dateDebut ? projet.dateDebut.slice(0, 10) : '',
         dateFin: projet.dateFin ? projet.dateFin.slice(0, 10) : '',
-        etapes: projet.etapes || []
+        etapes: (projet.etapes || []).map(e => ({ ...e, id: e.id || genId() }))
       });
     } else {
-      setFormData(defaultForm);
+      setFormData({
+        ...defaultForm,
+        etapes: ETAPES_TEMPLATE.map(titre => ({ id: genId(), titre, faite: false }))
+      });
     }
   }, [projet]);
 
   const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
 
+  const loadImageFile = (file) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onloadend = () => handleChange('image', reader.result);
+    reader.readAsDataURL(file);
+  };
+
   const handlePasteImage = async () => {
     try {
       const items = await navigator.clipboard.read();
       for (const item of items) {
-        for (const type of item.types) {
-          if (type.startsWith('image/')) {
-            const blob = await item.getType(type);
-            const reader = new FileReader();
-            reader.onloadend = () => handleChange('image', reader.result);
-            reader.readAsDataURL(blob);
-            return;
-          }
-        }
+        const imageType = item.types.find(t => t.startsWith('image/'));
+        if (imageType) { loadImageFile(await item.getType(imageType)); return; }
       }
-      alert("Pas d'image dans le presse-papier");
-    } catch {
-      alert("Erreur : copiez d'abord une image avec Ctrl+C");
+    } catch { console.error('Impossible de lire le presse-papiers'); }
+  };
+
+  useEffect(() => {
+    const handlePaste = (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) { loadImageFile(item.getAsFile()); return; }
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, []);
+
+  const ajouterEtape = (titre) => {
+    if (!titre?.trim()) return;
+    handleChange('etapes', [...formData.etapes, { id: genId(), titre: titre.trim(), faite: false }]);
+    setNewEtape('');
+  };
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIdx = formData.etapes.findIndex(e => e.id === active.id);
+      const newIdx = formData.etapes.findIndex(e => e.id === over.id);
+      handleChange('etapes', arrayMove(formData.etapes, oldIdx, newIdx));
     }
   };
 
-  const ajouterEtape = () => {
-    if (!nouvelleEtape.trim()) return;
-    handleChange('etapes', [...formData.etapes, { titre: nouvelleEtape.trim(), faite: false }]);
-    setNouvelleEtape('');
-  };
-
-  const supprimerEtape = (idx) => {
-    handleChange('etapes', formData.etapes.filter((_, i) => i !== idx));
-  };
-
-  const toggleEtape = (idx) => {
-    const updated = formData.etapes.map((e, i) => i === idx ? { ...e, faite: !e.faite } : e);
-    handleChange('etapes', updated);
-  };
+  const etapesFaites = formData.etapes.filter(e => e.faite).length;
+  const totalEtapes = formData.etapes.length;
+  const progression = totalEtapes > 0 ? Math.round((etapesFaites / totalEtapes) * 100) : 0;
 
   const handleSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -170,53 +241,76 @@ function ProjetForm({ projet, patrons, tissus, onSave, onCancel }) {
           />
         </Box>
 
-        <FormControl fullWidth sx={fieldSx}>
-          <InputLabel>Statut</InputLabel>
-          <Select value={formData.statut} label="Statut" onChange={e => handleChange('statut', e.target.value)}>
-            <MenuItem value="En cours">En cours</MenuItem>
-            <MenuItem value="Terminé">Terminé</MenuItem>
-          </Select>
-        </FormControl>
+        <Box>
+          <Typography variant="body2" sx={{ mb: 0.75, fontWeight: 700, color: 'text.secondary', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            État
+          </Typography>
+          <RadioGroup row value={formData.statut} onChange={e => handleChange('statut', e.target.value)}>
+            {['Idée', 'En cours', 'Terminé'].map(val => (
+              <FormControlLabel key={val} value={val} label={val} control={
+                <Radio size="small" sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
+              } />
+            ))}
+          </RadioGroup>
+        </Box>
 
         {/* Étapes */}
         <Box>
-          <Typography variant="body2" sx={{ mb: 1, fontWeight: 700, color: 'text.secondary', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <Typography variant="body2" sx={{ mb: 1.5, fontWeight: 700, color: 'text.secondary', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Étapes
           </Typography>
-          <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-            <TextField
-              size="small"
-              placeholder="Ajouter une étape..."
-              value={nouvelleEtape}
-              onChange={e => setNouvelleEtape(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ajouterEtape(); } }}
-              sx={{ flexGrow: 1, ...fieldSx }}
+
+          {totalEtapes > 0 && (
+            <Box sx={{ mb: 1.5 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                  {etapesFaites}/{totalEtapes} terminées
+                </Typography>
+                <Typography variant="body2" sx={{ fontSize: '0.75rem', fontWeight: 800, color: '#0cbaba' }}>
+                  {progression}%
+                </Typography>
+              </Box>
+              <LinearProgress variant="determinate" value={progression}
+                sx={{ height: 5, borderRadius: 3, bgcolor: 'rgba(26,19,10,0.07)', '& .MuiLinearProgress-bar': { bgcolor: '#0cbaba' } }} />
+            </Box>
+          )}
+
+          {totalEtapes > 0 && (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={formData.etapes.map(e => e.id)} strategy={verticalListSortingStrategy}>
+                <Box sx={{ mb: 1.5, bgcolor: 'rgba(51,101,138,0.04)', borderRadius: 2, border: '1.5px solid rgba(26,19,10,0.07)', py: 0.5 }}>
+                  {formData.etapes.map((etape, idx) => (
+                    <SortableEtape
+                      key={etape.id}
+                      etape={etape}
+                      onToggle={() => handleChange('etapes', formData.etapes.map((e, i) => i === idx ? { ...e, faite: !e.faite } : e))}
+                      onDelete={() => handleChange('etapes', formData.etapes.filter((_, i) => i !== idx))}
+                    />
+                  ))}
+                </Box>
+              </SortableContext>
+            </DndContext>
+          )}
+
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Autocomplete
+              freeSolo
+              options={suggestions}
+              inputValue={newEtape}
+              onInputChange={(_, val) => setNewEtape(val)}
+              onChange={(_, val) => { if (val && typeof val === 'string') ajouterEtape(val); }}
+              fullWidth
+              renderInput={(params) => (
+                <TextField {...params} size="small" placeholder="Ajouter une étape..."
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ajouterEtape(newEtape); } }}
+                  sx={fieldSx} />
+              )}
             />
-            <IconButton onClick={ajouterEtape} sx={{ bgcolor: '#33658a', color: 'white', borderRadius: 1.5, '&:hover': { bgcolor: '#1e4d6b' } }}>
+            <IconButton onClick={() => ajouterEtape(newEtape)}
+              sx={{ bgcolor: '#33658a', color: 'white', borderRadius: 1.5, '&:hover': { bgcolor: '#1e4d6b' } }}>
               <Plus size={18} />
             </IconButton>
           </Box>
-          {formData.etapes.length > 0 && (
-            <List dense sx={{ bgcolor: 'rgba(51,101,138,0.04)', borderRadius: 2, border: '1.5px solid rgba(26,19,10,0.07)' }}>
-              {formData.etapes.map((etape, idx) => (
-                <ListItem key={idx} disablePadding sx={{ px: 1 }}>
-                  <Checkbox
-                    checked={etape.faite}
-                    onChange={() => toggleEtape(idx)}
-                    size="small"
-                    sx={{ color: '#0cbaba', '&.Mui-checked': { color: '#0cbaba' } }}
-                  />
-                  <ListItemText
-                    primary={etape.titre}
-                    primaryTypographyProps={{ sx: { textDecoration: etape.faite ? 'line-through' : 'none', color: etape.faite ? 'text.disabled' : 'inherit', fontSize: '0.88rem' } }}
-                  />
-                  <IconButton size="small" onClick={() => supprimerEtape(idx)} edge="end" sx={{ color: '#e85d75', mr: 0.5 }}>
-                    <Trash2 size={14} strokeWidth={2} />
-                  </IconButton>
-                </ListItem>
-              ))}
-            </List>
-          )}
         </Box>
 
         <TextField
@@ -237,19 +331,36 @@ function ProjetForm({ projet, patrons, tissus, onSave, onCancel }) {
           {formData.image ? (
             <Box sx={{ position: 'relative', display: 'inline-block' }}>
               <img src={formData.image} alt="Aperçu" style={{ width: 160, height: 120, objectFit: 'cover', borderRadius: 8 }} />
-              <IconButton
-                size="small"
-                onClick={() => handleChange('image', '')}
-                sx={{ position: 'absolute', top: -8, right: -8, bgcolor: 'white', boxShadow: 1 }}
-              >
+              <IconButton size="small" onClick={() => handleChange('image', '')}
+                sx={{ position: 'absolute', top: -8, right: -8, bgcolor: 'white', boxShadow: 1 }}>
                 <Trash2 size={14} strokeWidth={2} />
               </IconButton>
             </Box>
           ) : (
-            <Button variant="outlined" startIcon={<Clipboard size={16} />} onClick={handlePasteImage}
-              sx={{ borderColor: '#33658a', color: '#33658a', fontWeight: 600, borderWidth: 2 }}>
-              Coller depuis le presse-papier
-            </Button>
+            <Box
+              onDragOver={e => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={e => { e.preventDefault(); setDragging(false); loadImageFile(e.dataTransfer.files[0]); }}
+              onClick={() => document.getElementById('projet-file-input').click()}
+              sx={{
+                border: `2px dashed ${dragging ? '#33658a' : '#e8e3dd'}`,
+                borderRadius: 2, p: 2.5, textAlign: 'center', cursor: 'pointer',
+                bgcolor: dragging ? '#e3eef7' : 'transparent',
+                transition: 'all 0.15s',
+                '&:hover': { borderColor: '#33658a', bgcolor: '#f0f6fa' }
+              }}
+            >
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: '0.85rem' }}>
+                Glisser-déposer ou cliquer pour parcourir
+              </Typography>
+              <Button size="small" variant="outlined" startIcon={<Clipboard size={14} />}
+                onClick={e => { e.stopPropagation(); handlePasteImage(); }}
+                sx={{ borderColor: '#33658a', color: '#33658a', fontWeight: 600, borderWidth: 2 }}>
+                Coller une image
+              </Button>
+              <input id="projet-file-input" type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={e => loadImageFile(e.target.files[0])} />
+            </Box>
           )}
         </Box>
 

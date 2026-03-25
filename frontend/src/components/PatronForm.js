@@ -388,7 +388,6 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
         gap: 1.5
       }}
     >
-      {Icon && <Icon size={22} color={color} strokeWidth={2.5} />}
       {children}
     </Typography>
   );

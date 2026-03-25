@@ -14,7 +14,7 @@ function ProjetEnCours({ projets, patrons, tissus, loading, onRefresh }) {
   const [terminerTarget, setTerminerTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const enCours = projets.filter(p => p.statut === 'En cours');
+  const enCours = projets.filter(p => p.statut === 'En cours' || p.statut === 'Idée');
 
   const getPatron = (id) => patrons.find(p => p._id === id);
   const getTissu = (id) => tissus.find(t => t._id === id);
@@ -72,7 +72,6 @@ function ProjetEnCours({ projets, patrons, tissus, loading, onRefresh }) {
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <FolderOpen size={28} strokeWidth={2} color="#33658a" />
           <Typography variant="h4" sx={{ fontWeight: 900 }}>Projets en cours</Typography>
           {enCours.length > 0 && (
             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
@@ -185,7 +184,7 @@ function ProjetEnCours({ projets, patrons, tissus, loading, onRefresh }) {
                       />
                       <Box sx={{ mt: 0.75, maxHeight: 110, overflowY: 'auto' }}>
                         {projet.etapes.map((etape, idx) => (
-                          <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }} onClick={e => e.stopPropagation()}>
+                          <Box key={etape.id || idx} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }} onClick={e => e.stopPropagation()}>
                             <Checkbox
                               checked={etape.faite}
                               onChange={e => handleToggleEtape(projet, idx, e)}

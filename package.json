@@ -1,0 +1,59 @@
+{
+  "name": "sewing-box",
+  "version": "1.0.0",
+  "description": "Gestionnaire de patrons de couture",
+  "author": "Sewing Box",
+  "main": "electron/main.js",
+  "scripts": {
+    "electron:dev": "electron .",
+    "build:frontend": "npm run build --prefix frontend",
+    "dist": "npm run build:frontend && electron-builder"
+  },
+  "dependencies": {
+    "@seald-io/nedb": "^4.0.4",
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.sewingbox.app",
+    "productName": "Sewing Box",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/**/*",
+      "backend/server.js",
+      "frontend/build/**/*",
+      "node_modules/**/*",
+      "!node_modules/.cache/**",
+      "!node_modules/electron/**",
+      "!node_modules/electron-builder/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "sewing.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerLanguages": [
+        "fr_FR"
+      ],
+      "language": "1036",
+      "include": "electron/uninstall.nsh"
+    }
+  }
+}

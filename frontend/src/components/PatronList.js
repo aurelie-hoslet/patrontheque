@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import {
   Paper, CardMedia, Typography, Chip, Box, CircularProgress,
-  IconButton, Button, Dialog, DialogContent, Tooltip
+  IconButton, Button, Dialog, DialogContent, Tooltip, Fab
 } from '@mui/material';
-import { Plus, Ruler, Heart, Scissors } from 'lucide-react';
+import { Plus, Ruler, Heart, Scissors, ChevronUp, X, Shuffle } from 'lucide-react';
 import PatronFilters from './PatronFilters';
 import PatronModal from './PatronModal';
 import PatronForm from './PatronForm';
@@ -16,16 +16,23 @@ const LANGUE_DRAPEAUX = {
   'Autre':    { emoji: '🌍' }
 };
 
-function PatronList({ patrons, loading, onDelete }) {
+function PatronList({ patrons, loading, onDelete, matchTissu, onClearMatch }) {
   const [filteredPatrons, setFilteredPatrons] = useState(patrons);
   const [selectedPatron, setSelectedPatron] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingPatron, setEditingPatron] = useState(null);
-  const savedScrollY = React.useRef(0);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  React.useEffect(() => {
+    const handleScroll = () => setShowScrollTop(window.scrollY > 300);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleOpenForm = (patron = null) => {
-    savedScrollY.current = window.scrollY;
+    // Ne pas écraser la position si on vient de la modale (déjà sauvegardée)
+    if (!modalOpen) savedScrollY.current = window.scrollY;
     setEditingPatron(patron);
     setFormOpen(true);
     setModalOpen(false);
@@ -76,7 +83,10 @@ function PatronList({ patrons, loading, onDelete }) {
     }
   };
 
+  const savedScrollY = React.useRef(0);
+
   const handleCardClick = (patron) => {
+    savedScrollY.current = window.scrollY;
     setSelectedPatron(patron);
     setModalOpen(true);
   };
@@ -84,6 +94,7 @@ function PatronList({ patrons, loading, onDelete }) {
   const handleCloseModal = () => {
     setModalOpen(false);
     setSelectedPatron(null);
+    requestAnimationFrame(() => window.scrollTo(0, savedScrollY.current));
   };
 
   if (loading) {
@@ -105,16 +116,35 @@ function PatronList({ patrons, loading, onDelete }) {
 
   return (
     <Box>
-      <PatronFilters onFilter={handleFilter} />
-
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 3, mb: 2 }}>
-        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
-          {filteredPatrons.length} patron{filteredPatrons.length > 1 ? 's' : ''}
-        </Typography>
+      {/* Header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Typography variant="h4" sx={{ fontWeight: 900 }}>Les Patrons</Typography>
         <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => handleOpenForm(null)}
           sx={{ bgcolor: '#e36397', '&:hover': { bgcolor: '#c9547f' }, fontWeight: 700, borderRadius: 2 }}>
           Ajouter un patron
         </Button>
+      </Box>
+
+      {matchTissu && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, px: 2, py: 1.25, bgcolor: 'rgba(227,99,151,0.08)', borderRadius: 2, border: '1.5px solid rgba(227,99,151,0.3)' }}>
+          <Shuffle size={16} color="#e36397" strokeWidth={2} />
+          <Typography variant="body2" sx={{ fontWeight: 700, color: '#e36397', flex: 1 }}>
+            Filtré pour : <strong>{matchTissu.nom}</strong>
+            {matchTissu.quantite != null ? ` — ${matchTissu.quantite} m disponibles` : ''}
+            {matchTissu.type ? ` · ${matchTissu.type}` : ''}
+          </Typography>
+          <IconButton size="small" onClick={onClearMatch} sx={{ color: '#e36397', p: 0.5 }}>
+            <X size={16} />
+          </IconButton>
+        </Box>
+      )}
+
+      <PatronFilters onFilter={handleFilter} matchTissu={matchTissu} onClearMatch={onClearMatch} />
+
+      <Box sx={{ mt: 3, mb: 2 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+          {filteredPatrons.length} patron{filteredPatrons.length > 1 ? 's' : ''}
+        </Typography>
       </Box>
 
       {filteredPatrons.length === 0 ? (
@@ -294,6 +324,25 @@ function PatronList({ patrons, loading, onDelete }) {
           />
         </DialogContent>
       </Dialog>
+
+      {showScrollTop && (
+        <Fab
+          size="small"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          sx={{
+            position: 'fixed',
+            bottom: 32,
+            right: 32,
+            bgcolor: '#e36397',
+            color: 'white',
+            '&:hover': { bgcolor: '#c9547f' },
+            boxShadow: '0 4px 14px rgba(227,99,151,0.4)',
+            zIndex: 1000,
+          }}
+        >
+          <ChevronUp size={20} />
+        </Fab>
+      )}
     </Box>
   );
 }

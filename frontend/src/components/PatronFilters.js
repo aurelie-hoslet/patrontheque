@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {
   Accordion, AccordionSummary, AccordionDetails, Typography,
   TextField, FormControl, InputLabel, Select, MenuItem,
-  OutlinedInput, Checkbox, ListItemText, Button,
+  OutlinedInput, Checkbox, ListItemText, Button, IconButton,
   FormControlLabel, ToggleButton, ToggleButtonGroup, Box
 } from '@mui/material';
-import { ChevronDown, SlidersHorizontal, Scissors } from 'lucide-react';
+import { ChevronDown, SlidersHorizontal, Scissors, X } from 'lucide-react';
 import { patronService } from '../services/api';
 
 const FILTRES_ACTIFS = true;
@@ -46,7 +46,7 @@ const filterFieldSx = {
   '& .MuiInputLabel-root.Mui-focused': { color: '#33658a' },
 };
 
-function PatronFilters({ onFilter }) {
+function PatronFilters({ onFilter, matchTissu, onClearMatch }) {
   const [filters, setFilters] = useState({
     searchText: '',
     langues: [],
@@ -62,6 +62,7 @@ function PatronFilters({ onFilter }) {
     taillesEnfant: [],
     formats: { projecteur: false, a4: false, a0: false },
     metrageRanges: [],
+    metrageMaxDispo: null,
     cousu: undefined
   });
 
@@ -83,11 +84,30 @@ function PatronFilters({ onFilter }) {
   }, []);
 
   const buildBackendFilters = (f) => {
-    const { metrageRanges, ...rest } = f;
-    if (!metrageRanges || metrageRanges.length === 0) return rest;
-    const selected = METRAGE_RANGES.filter(r => metrageRanges.includes(r.value));
-    return { ...rest, metrageRanges: selected.map(r => ({ min: r.min, max: r.max })) };
+    const { metrageRanges, metrageMaxDispo, ...rest } = f;
+    const result = { ...rest };
+    if (metrageRanges && metrageRanges.length > 0) {
+      const selected = METRAGE_RANGES.filter(r => metrageRanges.includes(r.value));
+      result.metrageRanges = selected.map(r => ({ min: r.min, max: r.max }));
+    }
+    if (metrageMaxDispo != null) result.metrageMaxDispo = metrageMaxDispo;
+    return result;
   };
+
+  useEffect(() => {
+    if (!matchTissu) return;
+    const updates = {};
+    if (matchTissu.type === 'Chaîne et trame' || matchTissu.type === 'Maille') {
+      updates.tissuTypes = [matchTissu.type];
+    }
+    if (matchTissu.quantite != null && matchTissu.quantite > 0) {
+      updates.metrageMaxDispo = matchTissu.quantite;
+      updates.metrageRanges = []; // désactiver les ranges manuels
+    }
+    if (Object.keys(updates).length > 0) {
+      setFilters(prev => ({ ...prev, ...updates }));
+    }
+  }, [matchTissu]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (FILTRES_ACTIFS) onFilter(buildBackendFilters(filters));
@@ -155,17 +175,19 @@ function PatronFilters({ onFilter }) {
       taillesEnfant: [],
       formats: { projecteur: false, a4: false, a0: false },
       metrageRanges: [],
+      metrageMaxDispo: null,
       cousu: undefined
     };
     setFilters(resetFilters);
     onFilter(resetFilters);
+    onClearMatch?.();
   };
 
   const hasActiveFilters = filters.searchText || filters.langues.length > 0 || filters.genres.length > 0
     || filters.types.length > 0 || filters.typeAccessoires.length > 0 || filters.manches.length > 0
     || filters.longueurs.length > 0 || filters.tissuTypes.length > 0 || filters.tissuSpecifique.length > 0
     || filters.details.length > 0 || filters.taillesDisponibles.length > 0 || filters.taillesEnfant.length > 0
-    || filters.metrageRanges.length > 0 || filters.cousu;
+    || filters.metrageRanges.length > 0 || filters.metrageMaxDispo != null || filters.cousu;
 
   const grid3 = { display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 };
 
@@ -394,24 +416,35 @@ function PatronFilters({ onFilter }) {
               </Select>
             </FormControl>
 
-            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-              <ToggleButtonGroup
-                value={filters.metrageRanges}
-                onChange={(e, val) => handleChange('metrageRanges', val)}
-                sx={{ flexWrap: 'wrap', gap: 0.5, justifyContent: 'center' }}
-              >
-                {METRAGE_RANGES.map(r => (
-                  <ToggleButton key={r.value} value={r.value}
-                    sx={{
-                      fontWeight: 700, borderColor: '#e8e3dd', color: '#33658a', borderWidth: 2,
-                      borderRadius: '20px !important',
-                      '&.Mui-selected': { bgcolor: '#33658a', color: '#fff', borderColor: '#33658a', '&:hover': { bgcolor: '#1e4d6b' } },
-                      '&:hover': { bgcolor: '#f7f3ee' }
-                    }}>
-                    {r.label}
-                  </ToggleButton>
-                ))}
-              </ToggleButtonGroup>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+              {filters.metrageMaxDispo != null ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 0.75, bgcolor: 'rgba(227,99,151,0.08)', borderRadius: 2, border: '1.5px solid rgba(227,99,151,0.3)' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#e36397' }}>
+                    ≤ {filters.metrageMaxDispo} m disponibles
+                  </Typography>
+                  <IconButton size="small" onClick={() => handleChange('metrageMaxDispo', null)} sx={{ color: '#e36397', p: 0.25 }}>
+                    <X size={14} />
+                  </IconButton>
+                </Box>
+              ) : (
+                <ToggleButtonGroup
+                  value={filters.metrageRanges}
+                  onChange={(e, val) => handleChange('metrageRanges', val)}
+                  sx={{ flexWrap: 'wrap', gap: 0.5, justifyContent: 'center' }}
+                >
+                  {METRAGE_RANGES.map(r => (
+                    <ToggleButton key={r.value} value={r.value}
+                      sx={{
+                        fontWeight: 700, borderColor: '#e8e3dd', color: '#33658a', borderWidth: 2,
+                        borderRadius: '20px !important',
+                        '&.Mui-selected': { bgcolor: '#33658a', color: '#fff', borderColor: '#33658a', '&:hover': { bgcolor: '#1e4d6b' } },
+                        '&:hover': { bgcolor: '#f7f3ee' }
+                      }}>
+                      {r.label}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
+              )}
             </Box>
 
             <FormControl fullWidth>

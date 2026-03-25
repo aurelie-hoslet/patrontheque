@@ -270,7 +270,6 @@ function PatronModal({ open, patron, onClose, onEdit, onDelete }) {
           {patron.pdfPath && (
             <Box sx={{ mt: 1, pt: 2, borderTop: '2px solid rgba(123,94,167,0.15)' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                <FileText size={16} color="#7b5ea7" strokeWidth={2} />
                 <Typography variant="subtitle2" sx={{ color: '#7b5ea7', fontWeight: 700 }}>Fichiers PDF</Typography>
               </Box>
               {pdfs === null ? (

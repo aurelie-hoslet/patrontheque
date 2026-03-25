@@ -39,6 +39,12 @@ function AppContent() {
   const { settings } = useSettings();
   const [currentTab, setCurrentTab] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [matchTissu, setMatchTissu] = useState(null);
+
+  const handleMatchTissu = (tissu) => {
+    setMatchTissu(tissu);
+    setCurrentTab(1);
+  };
   const [patrons, setPatrons] = useState([]);
   const [tissus, setTissus] = useState([]);
   const [projets, setProjets] = useState([]);
@@ -288,8 +294,8 @@ function AppContent() {
               onNavigate={(tab) => setCurrentTab(tab)}
             />
           )}
-          {currentTab === 1 && <PatronList patrons={patrons} loading={loading} onDelete={loadPatrons} />}
-          {currentTab === 2 && <TissuList tissus={tissus} loading={loadingTissus} onRefresh={loadTissus} />}
+          {currentTab === 1 && <PatronList patrons={patrons} loading={loading} onDelete={loadPatrons} matchTissu={matchTissu} onClearMatch={() => setMatchTissu(null)} />}
+          {currentTab === 2 && <TissuList tissus={tissus} loading={loadingTissus} onRefresh={loadTissus} onMatchTissu={handleMatchTissu} />}
           {currentTab === 3 && <ProjetEnCours projets={projets} patrons={patrons} tissus={tissus} loading={loadingProjets} onRefresh={loadProjets} />}
           {currentTab === 4 && <GalerieProjets projets={projets} patrons={patrons} tissus={tissus} loading={loadingProjets} onRefresh={loadProjets} />}
           {currentTab === 5 && <DealerList dealers={dealers} loading={loadingDealers} onRefresh={loadDealers} />}

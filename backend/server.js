@@ -275,6 +275,9 @@ app.post('/api/patrons/search', async (req, res) => {
         metrageMax: { $gte: r.min }
       }))});
     }
+    if (filters.metrageMaxDispo != null) {
+      query.metrageMax = { $lte: Number(filters.metrageMaxDispo) };
+    }
     if (filters.cousu !== undefined) {
       query.cousu = filters.cousu;
     }
@@ -441,6 +444,28 @@ app.get('/api/projets', async (req, res) => {
   try {
     const projets = await projetsDb.findAsync({});
     res.json(sortDocs(projets, 'dateCreation'));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/projets/etapes-suggestions', async (req, res) => {
+  try {
+    const projets = await projetsDb.findAsync({});
+    const titres = new Set();
+    projets.forEach(p => (p.etapes || []).forEach(e => { if (e.titre) titres.add(e.titre); }));
+    res.json([...titres].sort((a, b) => a.localeCompare(b, 'fr')));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.patch('/api/projets/:id/etapes', async (req, res) => {
+  try {
+    await projetsDb.updateAsync({ _id: req.params.id }, { $set: { etapes: req.body.etapes } });
+    const projet = await projetsDb.findOneAsync({ _id: req.params.id });
+    if (!projet) return res.status(404).json({ message: 'Projet non trouvé' });
+    res.json(projet);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -701,6 +726,151 @@ app.delete('/api/mensurations/:id', async (req, res) => {
     res.json({ message: 'Profil supprimé' });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+});
+
+// ── OG PREVIEW ───────────────────────────────────────────────────────────────
+
+function fetchUrl(url, maxRedirects = 5) {
+  return new Promise((resolve, reject) => {
+    const mod = url.startsWith('https') ? require('https') : require('http');
+    const req = mod.get(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SewingBox/1.0)', Accept: 'text/html' },
+      timeout: 8000,
+    }, (res) => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+        if (maxRedirects <= 0) return reject(new Error('Trop de redirections'));
+        const next = res.headers.location.startsWith('http')
+          ? res.headers.location
+          : new URL(res.headers.location, url).href;
+        return resolve(fetchUrl(next, maxRedirects - 1));
+      }
+      if (res.statusCode < 200 || res.statusCode >= 300) return reject(new Error(`HTTP ${res.statusCode}`));
+      res.setEncoding('utf8');
+      let data = '';
+      res.on('data', chunk => { data += chunk; if (data.length > 500_000) req.destroy(); });
+      res.on('end', () => resolve(data));
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
+  });
+}
+
+function getMetaContent(html, attrName, attrValue) {
+  // Extrait toutes les balises <meta ...> (multiline avec flag s)
+  const metas = [...html.matchAll(/<meta\s([\s\S]+?)\/?>(?!\s*<\/meta>)/gi)];
+  for (const meta of metas) {
+    const attrs = meta[1];
+    // Cherche property/name/itemprop = attrValue
+    const hasProp = new RegExp(`(?:property|name|itemprop)\\s*=\\s*["']${attrValue}["']`, 'i').test(attrs);
+    if (!hasProp) continue;
+    const contentMatch = attrs.match(/content\s*=\s*["']([^"']+)["']/i);
+    if (contentMatch) return contentMatch[1].trim();
+  }
+  return null;
+}
+
+function resolveUrl(base, relative) {
+  if (!relative) return null;
+  if (/^https?:\/\//.test(relative)) return relative;
+  try { return new URL(relative, base).href; } catch { return null; }
+}
+
+function getFavicon(html, baseUrl) {
+  // apple-touch-icon en priorité (meilleure résolution), puis icon standard
+  const patterns = [
+    /<link[^>]+rel=["'][^"']*apple-touch-icon[^"']*["'][^>]+href=["']([^"']+)["']/i,
+    /<link[^>]+href=["']([^"']+)["'][^>]+rel=["'][^"']*apple-touch-icon[^"']*["']/i,
+    /<link[^>]+rel=["'][^"']*(?:shortcut )?icon[^"']*["'][^>]+href=["']([^"']+)["']/i,
+    /<link[^>]+href=["']([^"']+)["'][^>]+rel=["'][^"']*(?:shortcut )?icon[^"']*["']/i,
+  ];
+  for (const p of patterns) {
+    const m = html.match(p);
+    if (m) return resolveUrl(baseUrl, m[1]);
+  }
+  // Fallback sur /favicon.ico
+  try { return new URL('/favicon.ico', baseUrl).href; } catch { return null; }
+}
+
+function parseOgTags(html, baseUrl) {
+  const title = getMetaContent(html, 'property', 'og:title')
+    || getMetaContent(html, 'name', 'twitter:title')
+    || html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim()
+    || null;
+  const rawImage = getMetaContent(html, 'property', 'og:image')
+    || getMetaContent(html, 'property', 'og:image:url')
+    || getMetaContent(html, 'name', 'twitter:image')
+    || null;
+  const image = resolveUrl(baseUrl, rawImage) || null;
+  const icon = getFavicon(html, baseUrl);
+  const description = getMetaContent(html, 'property', 'og:description')
+    || getMetaContent(html, 'name', 'description')
+    || getMetaContent(html, 'name', 'twitter:description')
+    || null;
+  return { title, image, icon, description };
+}
+
+function fetchImage(url, maxRedirects = 3) {
+  return new Promise((resolve, reject) => {
+    const mod = url.startsWith('https') ? require('https') : require('http');
+    const req = mod.get(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SewingBox/1.0)' },
+      timeout: 6000,
+    }, (res) => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+        if (maxRedirects <= 0) return reject(new Error('Trop de redirections'));
+        const next = res.headers.location.startsWith('http') ? res.headers.location : new URL(res.headers.location, url).href;
+        return resolve(fetchImage(next, maxRedirects - 1));
+      }
+      if (res.statusCode < 200 || res.statusCode >= 300) return reject(new Error(`HTTP ${res.statusCode}`));
+      const contentType = (res.headers['content-type'] || 'image/png').split(';')[0].trim();
+      if (!contentType.startsWith('image/')) return reject(new Error('Pas une image'));
+      const chunks = [];
+      let size = 0;
+      res.on('data', chunk => {
+        size += chunk.length;
+        if (size > 500_000) { req.destroy(); return reject(new Error('Image trop grande')); }
+        chunks.push(chunk);
+      });
+      res.on('end', () => resolve(`data:${contentType};base64,${Buffer.concat(chunks).toString('base64')}`));
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
+  });
+}
+
+app.get('/api/og-preview', async (req, res) => {
+  const { url } = req.query;
+  if (!url || !/^https?:\/\//.test(url)) return res.status(400).json({ error: 'URL invalide' });
+  try {
+    const domain = new URL(url).hostname;
+
+    // Fetch HTML + images en parallèle
+    const [htmlResult, clearbitResult, faviconResult] = await Promise.allSettled([
+      fetchUrl(url),
+      fetchImage(`https://logo.clearbit.com/${domain}`),
+      fetchImage(`https://www.google.com/s2/favicons?domain=${domain}&sz=128`),
+    ]);
+
+    const html = htmlResult.status === 'fulfilled' ? htmlResult.value : '';
+    const og = parseOgTags(html, url);
+
+    // og:image → base64 (fetch séparé si URL trouvée)
+    let imageBase64 = null;
+    if (og.image) {
+      try { imageBase64 = await fetchImage(og.image); } catch {}
+    }
+
+    const iconBase64 = clearbitResult.status === 'fulfilled' ? clearbitResult.value
+      : (faviconResult.status === 'fulfilled' ? faviconResult.value : null);
+
+    if (!og.title && !imageBase64 && !iconBase64 && !og.description) {
+      return res.status(404).json({ error: 'Aucune information trouvée pour ce lien' });
+    }
+
+    res.json({ title: og.title, image: imageBase64, icon: iconBase64, description: og.description });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Erreur de récupération' });
   }
 });
 

@@ -4,11 +4,11 @@ import {
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Button, IconButton, Tooltip
 } from '@mui/material';
-import { Layers, Plus, Pencil, Trash2, X } from 'lucide-react';
+import { Layers, Plus, Pencil, Trash2, X, Shuffle } from 'lucide-react';
 import { tissuService } from '../services/api';
 import TissuForm from './TissuForm';
 
-function TissuList({ tissus, loading, onRefresh }) {
+function TissuList({ tissus, loading, onRefresh, onMatchTissu }) {
   const [editingTissu, setEditingTissu] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
   const [detailTissu, setDetailTissu] = useState(null);
@@ -45,12 +45,9 @@ function TissuList({ tissus, loading, onRefresh }) {
     <Box>
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Layers size={28} strokeWidth={2} color="#33658a" />
-          <Typography variant="h4" sx={{ fontWeight: 900 }}>
-            Les Tissus
-          </Typography>
-        </Box>
+        <Typography variant="h4" sx={{ fontWeight: 900 }}>
+          Les Tissus
+        </Typography>
         <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => handleOpenForm(null)}
           sx={{ bgcolor: '#33658a', '&:hover': { bgcolor: '#1e4d6b' }, fontWeight: 700, borderRadius: 2 }}>
           Ajouter un tissu
@@ -165,11 +162,20 @@ function TissuList({ tissus, loading, onRefresh }) {
                 onClick={() => setDeleteTarget(detailTissu)}>
                 Supprimer
               </Button>
-              <Button startIcon={<Pencil size={16} />} variant="contained"
-                sx={{ bgcolor: '#33658a', '&:hover': { bgcolor: '#1e4d6b' }, fontWeight: 700 }}
-                onClick={() => handleOpenForm(detailTissu)}>
-                Modifier
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                {onMatchTissu && (
+                  <Button startIcon={<Shuffle size={16} />} variant="contained"
+                    sx={{ bgcolor: '#e36397', '&:hover': { bgcolor: '#c9547f' }, fontWeight: 700 }}
+                    onClick={() => { onMatchTissu(detailTissu); setDetailTissu(null); }}>
+                    Matche avec
+                  </Button>
+                )}
+                <Button startIcon={<Pencil size={16} />} variant="contained"
+                  sx={{ bgcolor: '#33658a', '&:hover': { bgcolor: '#1e4d6b' }, fontWeight: 700 }}
+                  onClick={() => handleOpenForm(detailTissu)}>
+                  Modifier
+                </Button>
+              </Box>
             </DialogActions>
           </>
         )}

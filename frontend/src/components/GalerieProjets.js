@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box, Typography, IconButton,
   Dialog, DialogTitle, DialogContent, DialogActions, Button, CircularProgress,
@@ -8,6 +8,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import UndoIcon from '@mui/icons-material/Undo';
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
+import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import { projetService } from '../services/api';
 
 const defaultAdd = { nom: '', patronId: '', tissuId: '', dateFin: '', notes: '', image: '' };
@@ -77,6 +78,29 @@ function GalerieProjets({ projets, patrons, tissus, loading, onRefresh }) {
     reader.readAsDataURL(file);
   };
 
+  const handlePasteImage = async () => {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find(t => t.startsWith('image/'));
+        if (imageType) { loadImageFile(await item.getType(imageType)); return; }
+      }
+    } catch { console.error('Impossible de lire le presse-papiers'); }
+  };
+
+  useEffect(() => {
+    if (!addOpen) return;
+    const handlePaste = (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) { loadImageFile(item.getAsFile()); return; }
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [addOpen]);
+
   const handleAddSubmit = async () => {
     setSaving(true);
     try {
@@ -103,9 +127,9 @@ function GalerieProjets({ projets, patrons, tissus, loading, onRefresh }) {
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h6">
+        <Typography variant="h4" sx={{ fontFamily: "'Permanent Marker', cursive", fontWeight: 900 }}>
           {termines.length > 0
-            ? `🎉 ${termines.length} projet${termines.length > 1 ? 's' : ''} terminé${termines.length > 1 ? 's' : ''}`
+            ? `${termines.length} projet${termines.length > 1 ? 's' : ''} terminé${termines.length > 1 ? 's' : ''}`
             : 'Galerie des projets terminés'}
         </Typography>
         <Button
@@ -237,6 +261,11 @@ function GalerieProjets({ projets, patrons, tissus, loading, onRefresh }) {
                 <Typography variant="body2" color="text.secondary">
                   Glisser-déposer une photo ici<br />ou cliquer pour ouvrir un dossier
                 </Typography>
+                <Button size="small" variant="outlined" startIcon={<ContentPasteIcon sx={{ fontSize: 14 }} />}
+                  onClick={e => { e.stopPropagation(); handlePasteImage(); }}
+                  sx={{ mt: 1, borderColor: '#0cbaba', color: '#0cbaba', fontWeight: 600, borderWidth: 2 }}>
+                  Coller une image
+                </Button>
                 <input
                   id="galerie-file-input"
                   type="file"

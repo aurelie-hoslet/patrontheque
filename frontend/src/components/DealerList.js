@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box, Typography, Button, IconButton, Paper,
   Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, CircularProgress, Chip, FormControlLabel, Checkbox, Tooltip
 } from '@mui/material';
 import { Store, Plus, Pencil, Trash2, ExternalLink, CheckCircle } from 'lucide-react';
-import { dealerService } from '../services/api';
+import { dealerService, ogService } from '../services/api';
 
 const CATEGORIES = ['Tissus', 'Mercerie', 'Patrons', 'Autre'];
 
@@ -16,7 +16,7 @@ const CAT_COLORS = {
   'Autre':    { bg: '#0cbaba', light: '#e0f7f7' },
 };
 
-const defaultForm = { nom: '', url: '', categories: [], dejaCliente: false, description: '' };
+const defaultForm = { nom: '', url: '', categories: [], dejaCliente: false, description: '', image: '', icon: '' };
 
 const fieldSx = {
   '& .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: '#e8e3dd' },
@@ -33,6 +33,60 @@ function DealerList({ dealers, loading, onRefresh }) {
   const [saving, setSaving] = useState(false);
   const [filterCat, setFilterCat] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [ogPreview, setOgPreview] = useState(null);
+  const [ogLoading, setOgLoading] = useState(false);
+  const [ogError, setOgError] = useState(null);
+  const ogDebounceRef = useRef(null);
+
+  const handleUrlChange = (value) => {
+    setFormData(p => ({ ...p, url: value }));
+    setOgPreview(null);
+    setOgError(null);
+    clearTimeout(ogDebounceRef.current);
+    if (!/^https?:\/\/.{4}/.test(value)) return;
+    ogDebounceRef.current = setTimeout(async () => {
+      setOgLoading(true);
+      try {
+        const res = await ogService.preview(value);
+        setOgPreview(res.data);
+        setOgError(null);
+      } catch (err) {
+        setOgPreview(null);
+        setOgError(err?.response?.data?.error || 'Aperçu non disponible pour ce lien');
+      } finally {
+        setOgLoading(false);
+      }
+    }, 700);
+  };
+
+  const applyOgPreview = () => {
+    setFormData(p => ({
+      ...p,
+      nom: p.nom.trim() || ogPreview.title || p.nom,
+      description: p.description.trim() || ogPreview.description || p.description,
+      image: p.image || ogPreview.image || ogPreview.icon || '',
+      icon: p.icon || ogPreview.icon || '',
+    }));
+    setOgPreview(null);
+  };
+
+  useEffect(() => {
+    if (!formOpen) {
+      setOgPreview(null);
+      setOgError(null);
+      setOgLoading(false);
+      clearTimeout(ogDebounceRef.current);
+      return;
+    }
+    // À l'ouverture d'une fiche existante, fetch la preview si l'URL est déjà remplie
+    if (formData.url && /^https?:\/\/.{4}/.test(formData.url)) {
+      setOgLoading(true);
+      ogService.preview(formData.url)
+        .then(res => { setOgPreview(res.data); setOgError(null); })
+        .catch(err => { setOgPreview(null); setOgError(err?.response?.data?.error || 'Aperçu non disponible'); })
+        .finally(() => setOgLoading(false));
+    }
+  }, [formOpen]);
 
   const handleOpenForm = (dealer = null) => {
     setEditingDealer(dealer);
@@ -41,7 +95,9 @@ function DealerList({ dealers, loading, onRefresh }) {
       url: dealer.url,
       categories: dealer.categories || (dealer.categorie ? [dealer.categorie] : []),
       dejaCliente: dealer.dejaCliente || false,
-      description: dealer.description || ''
+      description: dealer.description || '',
+      image: dealer.image || '',
+      icon: dealer.icon || ''
     } : defaultForm);
     setFormOpen(true);
   };
@@ -90,7 +146,6 @@ function DealerList({ dealers, loading, onRefresh }) {
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Store size={28} strokeWidth={2} color="#7b5ea7" />
           <Typography variant="h4" sx={{ fontWeight: 900 }}>Les Dealers</Typography>
         </Box>
         <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => handleOpenForm(null)}
@@ -142,6 +197,17 @@ function DealerList({ dealers, loading, onRefresh }) {
                 transition: 'all 0.15s',
                 '&:hover': { boxShadow: `0 4px 16px ${colors.bg}22` },
               }}>
+                {dealer.image ? (
+                  <Box sx={{ height: 110, overflow: 'hidden' }}>
+                    <Box component="img" src={dealer.image} alt={dealer.nom}
+                      sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </Box>
+                ) : dealer.icon ? (
+                  <Box sx={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: `${colors.bg}0d` }}>
+                    <Box component="img" src={dealer.icon} alt={dealer.nom}
+                      sx={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 1 }} />
+                  </Box>
+                ) : null}
                 {/* Header */}
                 <Box sx={{ px: 2, py: 1.75, bgcolor: `${colors.bg}08`, borderBottom: '1px solid rgba(26,19,10,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -208,9 +274,48 @@ function DealerList({ dealers, loading, onRefresh }) {
             <TextField label="Nom du shop *" value={formData.nom}
               onChange={e => setFormData(p => ({ ...p, nom: e.target.value }))}
               fullWidth autoFocus sx={fieldSx} />
-            <TextField label="URL *" value={formData.url}
-              onChange={e => setFormData(p => ({ ...p, url: e.target.value }))}
-              fullWidth placeholder="https://..." sx={fieldSx} />
+            <Box>
+              <TextField label="URL *" value={formData.url}
+                onChange={e => handleUrlChange(e.target.value)}
+                fullWidth placeholder="https://..." sx={fieldSx}
+                InputProps={{ endAdornment: ogLoading ? <CircularProgress size={14} sx={{ mr: 1, color: '#7b5ea7' }} /> : null }} />
+              {ogError && !ogPreview && (
+                <Typography variant="body2" sx={{ mt: 0.75, fontSize: '0.75rem', color: 'text.disabled', fontStyle: 'italic' }}>
+                  {ogError}
+                </Typography>
+              )}
+              {ogPreview && (
+                <Box sx={{ mt: 1, border: '1.5px solid rgba(123,94,167,0.2)', borderRadius: 2, overflow: 'hidden', bgcolor: 'rgba(123,94,167,0.03)' }}>
+                  {ogPreview.image && (
+                    <Box component="img" src={ogPreview.image} alt=""
+                      sx={{ width: '100%', maxHeight: 120, objectFit: 'cover', display: 'block' }} />
+                  )}
+                  <Box sx={{ px: 1.5, py: 1 }}>
+                    {ogPreview.title && (
+                      <Typography sx={{ fontWeight: 700, fontSize: '0.88rem', lineHeight: 1.3, mb: 0.25 }}>
+                        {ogPreview.title}
+                      </Typography>
+                    )}
+                    {ogPreview.description && (
+                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.78rem',
+                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {ogPreview.description}
+                      </Typography>
+                    )}
+                    <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                      <Button size="small" variant="contained" onClick={applyOgPreview}
+                        sx={{ bgcolor: '#7b5ea7', '&:hover': { bgcolor: '#5c4380' }, fontWeight: 700, fontSize: '0.75rem', py: 0.25 }}>
+                        Utiliser ces infos
+                      </Button>
+                      <Button size="small" onClick={() => setOgPreview(null)}
+                        sx={{ color: 'text.secondary', fontSize: '0.75rem', py: 0.25 }}>
+                        Ignorer
+                      </Button>
+                    </Box>
+                  </Box>
+                </Box>
+              )}
+            </Box>
             <Box>
               <Typography sx={{ fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#7b5ea7', mb: 1 }}>
                 Catégories
