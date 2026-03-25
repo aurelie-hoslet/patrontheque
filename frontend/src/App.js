@@ -16,6 +16,7 @@ import WishList from './components/WishList';
 import Mensurations from './components/Mensurations';
 import APropos from './components/APropos';
 import Parametres from './components/Parametres';
+import UpdateBanner from './components/UpdateBanner';
 import { SettingsProvider, useSettings, getFontFamily, TITLE_FONT } from './context/SettingsContext';
 import { patronService, tissuService, projetService, dealerService } from './services/api';
 
@@ -314,6 +315,7 @@ export default function App() {
   return (
     <SettingsProvider>
       <AppContent />
+      <UpdateBanner />
     </SettingsProvider>
   );
 }

@@ -876,6 +876,33 @@ app.get('/api/og-preview', async (req, res) => {
   }
 });
 
+// ── Vérification de mise à jour ───────────────────────────────────────────────
+
+const CURRENT_VERSION = '1.2.0';
+
+app.get('/api/check-update', async (req, res) => {
+  try {
+    const data = await fetchUrl('https://api.github.com/repos/aurelie-hoslet/patrontheque/releases/latest');
+    const release = JSON.parse(data);
+    const latest = release.tag_name?.replace(/^v/, '');
+    if (!latest) return res.json({ hasUpdate: false });
+
+    const toNum = v => v.split('.').map(Number);
+    const [Ma, mi, pa] = toNum(latest);
+    const [Mc, mc, pc] = toNum(CURRENT_VERSION);
+    const hasUpdate = Ma > Mc || (Ma === Mc && mi > mc) || (Ma === Mc && mi === mc && pa > pc);
+
+    res.json({
+      hasUpdate,
+      latestVersion: latest,
+      currentVersion: CURRENT_VERSION,
+      downloadUrl: release.assets?.[0]?.browser_download_url || '',
+    });
+  } catch {
+    res.json({ hasUpdate: false });
+  }
+});
+
 // ── Frontend build (production Electron) ─────────────────────────────────────
 
 if (process.env.NODE_ENV === 'production') {

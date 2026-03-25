@@ -68,3 +68,7 @@ export const mensurationsService = {
   update: (id, item) => axios.put(`${API_URL}/mensurations/${id}`, item),
   delete: (id) => axios.delete(`${API_URL}/mensurations/${id}`)
 };
+
+export const updateService = {
+  check: () => axios.get(`${API_URL}/check-update`),
+};
