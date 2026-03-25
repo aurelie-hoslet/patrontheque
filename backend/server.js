@@ -879,7 +879,10 @@ app.get('/api/og-preview', async (req, res) => {
 // ── Frontend build (production Electron) ─────────────────────────────────────
 
 if (process.env.NODE_ENV === 'production') {
-  const frontendBuildPath = path.join(__dirname, '../frontend/build');
+  const base = __dirname.includes('app.asar')
+    ? __dirname.replace(/app\.asar([\/\\])/, 'app.asar.unpacked$1')
+    : __dirname;
+  const frontendBuildPath = path.join(base, '../frontend/build');
   if (fs.existsSync(frontendBuildPath)) {
     app.use(express.static(frontendBuildPath));
     app.get('*', (req, res) => {
