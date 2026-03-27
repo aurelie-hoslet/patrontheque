@@ -5,13 +5,13 @@ const path = require('path');
 const Datastore = require('@seald-io/nedb');
 
 const app = express();
-const PORT = 5000;
+const PORT = parseInt(process.env.APP_PORT) || 5000;
 
 // Répertoire de données : défini par Electron, ou local en dev
 const DATA_DIR = process.env.USER_DATA_PATH || path.join(__dirname, 'data');
-const PDF_DIR = process.env.USER_DATA_PATH
+const PDF_DIR = process.env.PDF_DIR || (process.env.USER_DATA_PATH
   ? path.join(process.env.USER_DATA_PATH, 'pdfs')
-  : path.join(__dirname, 'pdfs');
+  : path.join(__dirname, 'pdfs'));
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(PDF_DIR)) fs.mkdirSync(PDF_DIR, { recursive: true });

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+  <title>Sewing Box — Launcher</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #1a1a2e;
+      color: #e8e8f0;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+
+    .container {
+      text-align: center;
+      width: 100%;
+      max-width: 520px;
+      padding: 0 24px;
+    }
+
+    .logo {
+      font-size: 42px;
+      margin-bottom: 8px;
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: #ffffff;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #8888aa;
+      margin-bottom: 36px;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+    }
+
+    .btn {
+      flex: 1;
+      background: #16213e;
+      border: 1px solid #2a2a4e;
+      border-radius: 12px;
+      padding: 24px 16px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      text-align: center;
+      color: inherit;
+    }
+
+    .btn:hover {
+      background: #0f3460;
+      border-color: #7c6fa8;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn.launched {
+      border-color: #4caf50;
+      background: #0d2a0d;
+    }
+
+    .btn-icon {
+      font-size: 36px;
+      display: block;
+      margin-bottom: 12px;
+    }
+
+    .btn-label {
+      display: block;
+      font-size: 15px;
+      font-weight: 600;
+      color: #ffffff;
+      margin-bottom: 8px;
+    }
+
+    .btn-desc {
+      display: block;
+      font-size: 11px;
+      color: #8888aa;
+      line-height: 1.5;
+    }
+
+    .btn-badge {
+      display: inline-block;
+      font-size: 10px;
+      background: #7c6fa8;
+      color: white;
+      border-radius: 4px;
+      padding: 2px 7px;
+      margin-top: 10px;
+    }
+
+    .btn-badge.test {
+      background: #b05e00;
+    }
+
+    #status-area {
+      margin-top: 28px;
+      min-height: 22px;
+      font-size: 12px;
+      color: #8888aa;
+    }
+
+    .status-msg {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #4caf50;
+      display: inline-block;
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    .hint {
+      margin-top: 14px;
+      font-size: 11px;
+      color: #55556a;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">🧵</div>
+    <h1>Sewing Box</h1>
+    <p class="subtitle">Choisissez le mode de lancement</p>
+
+    <div class="buttons">
+      <button class="btn" id="btn-normal" onclick="launch('normal')">
+        <span class="btn-icon">🏠</span>
+        <span class="btn-label">Mes données</span>
+        <span class="btn-desc">Lance l'application avec vos patrons et données habituels</span>
+        <span class="btn-badge">Port 5000</span>
+      </button>
+
+      <button class="btn" id="btn-test" onclick="launch('test')">
+        <span class="btn-icon">🧪</span>
+        <span class="btn-label">Mode démo / test</span>
+        <span class="btn-desc">Instance fraîche avec données vides, côte à côte</span>
+        <span class="btn-badge test">Port 5001</span>
+      </button>
+    </div>
+
+    <div id="status-area"></div>
+    <p class="hint">Le launcher reste ouvert — vous pouvez lancer les deux modes simultanément.</p>
+  </div>
+
+  <script>
+    const launched = { normal: false, test: false }
+
+    function launch(mode) {
+      window.launcher.launch(mode)
+    }
+
+    window.launcher.onStatus(({ mode, ok, message }) => {
+      if (ok) {
+        launched[mode] = true
+        const btn = document.getElementById('btn-' + mode)
+        btn.classList.add('launched')
+      }
+
+      const area = document.getElementById('status-area')
+      area.innerHTML = ok
+        ? `<span class="status-msg"><span class="dot"></span>${message}</span>`
+        : `<span style="color:#e57373">${message}</span>`
+    })
+  </script>
+</body>
+</html>

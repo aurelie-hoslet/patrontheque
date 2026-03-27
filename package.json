@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "concurrently \"node backend/server.js\" \"npm start --prefix frontend\"",
     "electron:dev": "electron .",
+    "launcher": "electron electron/launcher.js",
     "build:frontend": "npm run build --prefix frontend",
     "dist": "npm run build:frontend && electron-builder"
   },

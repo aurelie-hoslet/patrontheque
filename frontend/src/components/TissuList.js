@@ -8,6 +8,12 @@ import { Layers, Plus, Pencil, Trash2, X, Shuffle } from 'lucide-react';
 import { tissuService } from '../services/api';
 import TissuForm from './TissuForm';
 
+const COULEURS_MAP = {
+  rouge: '#e53935', bleu: '#1e88e5', vert: '#43a047', jaune: '#fdd835',
+  noir: '#212121', blanc: '#f0f0f0', orange: '#fb8c00', rose: '#e91e8c',
+  violet: '#8e24aa', marron: '#6d4c41', gris: '#757575', beige: '#d4b896',
+};
+
 function TissuList({ tissus, loading, onRefresh, onMatchTissu }) {
   const [editingTissu, setEditingTissu] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -123,7 +129,16 @@ function TissuList({ tissus, loading, onRefresh, onMatchTissu }) {
               {/* Body */}
               <Box sx={{ px: 2, py: 1.5, display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center' }}>
                 {tissu.type && <Chip label={tissu.type} size="small" sx={{ bgcolor: '#33658a', color: 'white', fontWeight: 700, fontSize: '0.7rem', height: 20 }} />}
-                {tissu.couleur && <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>{tissu.couleur}</Typography>}
+                {tissu.teinte && COULEURS_MAP[tissu.teinte] && (
+                  <Tooltip title={tissu.teinte.charAt(0).toUpperCase() + tissu.teinte.slice(1)}>
+                    <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: COULEURS_MAP[tissu.teinte], border: '1.5px solid rgba(0,0,0,0.15)', flexShrink: 0 }} />
+                  </Tooltip>
+                )}
+                {(tissu.precisionCouleur || tissu.teinte) && (
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+                    {tissu.precisionCouleur || tissu.teinte}
+                  </Typography>
+                )}
                 {tissu.quantite != null && (
                   <Typography sx={{ fontWeight: 800, color: '#0cbaba', fontSize: '0.85rem', ml: 'auto' }}>
                     {tissu.quantite} m
@@ -150,10 +165,35 @@ function TissuList({ tissus, loading, onRefresh, onMatchTissu }) {
                   sx={{ width: '100%', maxHeight: 300, objectFit: 'contain', mb: 2, borderRadius: 2 }} />
               )}
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {detailTissu.type && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 100 }}>Type</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.type}</Typography></Box>}
-                {detailTissu.couleur && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 100 }}>Couleur</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.couleur}</Typography></Box>}
-                {detailTissu.quantite != null && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 100 }}>Quantité</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.quantite} m</Typography></Box>}
-                {detailTissu.provenance && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 100 }}>Provenance</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.provenance}</Typography></Box>}
+                {detailTissu.type && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Type</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.type}</Typography></Box>}
+                {detailTissu.teinte && (
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    <Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Teinte</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                      {COULEURS_MAP[detailTissu.teinte] && <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: COULEURS_MAP[detailTissu.teinte], border: '1.5px solid rgba(0,0,0,0.15)' }} />}
+                      <Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.teinte.charAt(0).toUpperCase() + detailTissu.teinte.slice(1)}</Typography>
+                    </Box>
+                  </Box>
+                )}
+                {detailTissu.precisionCouleur && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Précision couleur</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.precisionCouleur}</Typography></Box>}
+                {detailTissu.motifs && detailTissu.motifs.length > 0 && (
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                    <Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120, pt: 0.25 }}>Motifs</Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {detailTissu.motifs.map(m => <Chip key={m} label={m} size="small" sx={{ bgcolor: '#f0ece8', fontSize: '0.72rem', height: 20 }} />)}
+                    </Box>
+                  </Box>
+                )}
+                {detailTissu.quantite != null && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Quantité</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.quantite} m</Typography></Box>}
+                {detailTissu.provenance && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Provenance</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.provenance}</Typography></Box>}
+                {detailTissu.composition && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Composition</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.composition}</Typography></Box>}
+                {detailTissu.poids != null && detailTissu.poids !== '' && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Poids</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.poids} g/m²</Typography></Box>}
+                {(detailTissu.lave || detailTissu.dejaUtilise) && (
+                  <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mt: 0.5 }}>
+                    {detailTissu.lave && <Chip label="Lavé" size="small" sx={{ bgcolor: '#e3eef7', color: '#1e4d6b', fontWeight: 700, fontSize: '0.72rem', height: 20 }} />}
+                    {detailTissu.dejaUtilise && <Chip label="Déjà utilisé" size="small" sx={{ bgcolor: '#fef3e2', color: '#b45309', fontWeight: 700, fontSize: '0.72rem', height: 20 }} />}
+                  </Box>
+                )}
               </Box>
             </DialogContent>
             <DialogActions sx={{ justifyContent: 'space-between', p: 2 }}>
