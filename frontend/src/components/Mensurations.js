@@ -5,7 +5,7 @@ import {
   Select, MenuItem, FormControl, InputLabel
 } from '@mui/material';
 import { PersonStanding, Plus, Pencil, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
-import { mensurationsService } from '../services/api';
+import { mensurationsService, historiqueService } from '../services/api';
 import { useSettings, getFontFamily } from '../context/SettingsContext';
 
 const CHAMPS = [
@@ -218,6 +218,17 @@ export default function Mensurations() {
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (editing?._id) {
+      historiqueService.track({
+        id: editing._id,
+        type: 'mensuration',
+        nom: editing.nom || 'Profil',
+        image: null,
+      }).catch(() => {});
+    }
+  }, [editing?._id]);
 
   const load = async () => {
     try {

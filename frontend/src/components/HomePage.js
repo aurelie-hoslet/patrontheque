@@ -1,10 +1,13 @@
-import React from 'react';
-import { Box, Typography } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { Box, Typography, IconButton } from '@mui/material';
 import {
   Shirt, Layers, ClipboardList, Images,
-  Store, Sparkles, Bookmark, PersonStanding, ArrowRight, Plus
+  Store, Sparkles, Bookmark, PersonStanding, ArrowRight, Plus,
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useSettings, getFontFamily, TITLE_FONT } from '../context/SettingsContext';
+import { historiqueService, patronService } from '../services/api';
+import PatronModal from './PatronModal';
 
 const MODULES = [
   {
@@ -168,9 +171,98 @@ function ModuleCard({ mod, count, onNavigate, isDark }) {
 }
 
 
+const HISTO_TYPE_CONFIG = {
+  patron:      { icon: Shirt,          color: '#e36397', label: 'Patron',      tab: 1 },
+  tissu:       { icon: Layers,         color: '#33658a', label: 'Tissu',       tab: 2 },
+  projet:      { icon: ClipboardList,  color: '#0cbaba', label: 'Projet',      tab: 3 },
+  dealer:      { icon: Store,          color: '#7b5ea7', label: 'Dealer',      tab: 5 },
+  inspiration: { icon: Sparkles,       color: '#e36397', label: 'Inspiration', tab: 6 },
+  wishlist:    { icon: Bookmark,       color: '#33658a', label: 'Wish list',   tab: 7 },
+  mensuration: { icon: PersonStanding, color: '#e36397', label: 'Mensuration', tab: 8 },
+};
+
+const HISTO_VISIBLE_KEY = 'sewing_histo_visible';
+
+function HistoriqueCard({ item, onOpen, isDark }) {
+  const cfg = HISTO_TYPE_CONFIG[item.type] || HISTO_TYPE_CONFIG.patron;
+  const Icon = cfg.icon;
+  return (
+    <Box
+      onClick={onOpen}
+      sx={{
+        flexShrink: 0,
+        width: 130,
+        borderRadius: 2.5,
+        overflow: 'hidden',
+        border: `1.5px solid ${cfg.color}30`,
+        bgcolor: isDark ? '#1a1a2e' : 'white',
+        cursor: 'pointer',
+        transition: 'all 0.18s',
+        '&:hover': {
+          transform: 'translateY(-3px)',
+          boxShadow: `0 6px 20px ${cfg.color}33`,
+          border: `1.5px solid ${cfg.color}66`,
+        },
+      }}
+    >
+      {/* Thumbnail */}
+      {item.image ? (
+        <Box sx={{ height: 90, overflow: 'hidden', bgcolor: `${cfg.color}10` }}>
+          <Box component="img" src={item.image} alt={item.nom}
+            sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        </Box>
+      ) : (
+        <Box sx={{ height: 90, bgcolor: `${cfg.color}10`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon size={32} color={cfg.color} strokeWidth={1.5} style={{ opacity: 0.35 }} />
+        </Box>
+      )}
+      {/* Infos */}
+      <Box sx={{ px: 1, py: 0.75 }}>
+        <Typography sx={{ fontSize: '0.65rem', fontWeight: 700, color: cfg.color, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.25 }}>
+          {cfg.label}
+        </Typography>
+        <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: 'text.primary', lineHeight: 1.25 }}
+          style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          {item.nom}
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
+
 function HomePage({ patrons, tissus = [], projets = [], dealers = [], onNavigate }) {
   const { settings } = useSettings();
   const isDark = settings.mode === 'dark';
+
+  const [historique, setHistorique] = useState([]);
+  const [histoVisible, setHistoVisible] = useState(() => {
+    try { return localStorage.getItem(HISTO_VISIBLE_KEY) !== 'false'; } catch { return true; }
+  });
+  const [histoPatron, setHistoPatron] = useState(null);
+  const [histoPatronOpen, setHistoPatronOpen] = useState(false);
+
+  useEffect(() => {
+    historiqueService.getAll().then(res => setHistorique(res.data)).catch(() => {});
+  }, []);
+
+  const toggleHistoVisible = () => {
+    setHistoVisible(v => {
+      const next = !v;
+      try { localStorage.setItem(HISTO_VISIBLE_KEY, String(next)); } catch {}
+      return next;
+    });
+  };
+
+  const handleHistoClick = (item) => {
+    if (item.type === 'patron') {
+      patronService.getById(item.id)
+        .then(res => { setHistoPatron(res.data); setHistoPatronOpen(true); })
+        .catch(() => onNavigate(1));
+    } else {
+      const cfg = HISTO_TYPE_CONFIG[item.type];
+      if (cfg) onNavigate(cfg.tab);
+    }
+  };
 
   const projetsTermines = projets.filter(p => p.statut === 'Terminé').length;
 
@@ -209,6 +301,46 @@ function HomePage({ patrons, tissus = [], projets = [], dealers = [], onNavigate
           />
         ))}
       </Box>
+
+      {/* ── HISTORIQUE ── */}
+      <Box sx={{ mb: 6 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: histoVisible ? 2 : 0 }}>
+          <Typography sx={{ fontFamily: TITLE_FONT, fontSize: '1.2rem', fontWeight: 700, color: 'text.primary', flex: 1 }}>
+            Précédemment dans Sewing Box…
+          </Typography>
+          <IconButton size="small" onClick={toggleHistoVisible} sx={{ color: 'text.secondary' }}>
+            {histoVisible ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </IconButton>
+        </Box>
+        {histoVisible && (
+          historique.length === 0 ? (
+            <Typography sx={{ fontSize: '0.82rem', color: 'text.disabled', fontStyle: 'italic' }}>
+              Aucun élément récent
+            </Typography>
+          ) : (
+            <Box sx={{
+              display: 'flex', gap: 1.5, overflowX: 'auto', pb: 1,
+              '&::-webkit-scrollbar': { height: 4 },
+              '&::-webkit-scrollbar-track': { bgcolor: 'transparent' },
+              '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(0,0,0,0.15)', borderRadius: 2 },
+            }}>
+              {historique.map(item => (
+                <HistoriqueCard key={`${item.type}-${item.id}`} item={item} onOpen={() => handleHistoClick(item)} isDark={isDark} />
+              ))}
+            </Box>
+          )
+        )}
+      </Box>
+
+      {histoPatron && (
+        <PatronModal
+          open={histoPatronOpen}
+          patron={histoPatron}
+          onClose={() => { setHistoPatronOpen(false); setHistoPatron(null); }}
+          onEdit={() => { setHistoPatronOpen(false); onNavigate(1); }}
+          onDelete={() => { setHistoPatronOpen(false); onNavigate(1); }}
+        />
+      )}
 
     </Box>
   );

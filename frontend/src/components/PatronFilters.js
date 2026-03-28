@@ -7,6 +7,9 @@ import {
 } from '@mui/material';
 import { ChevronDown, SlidersHorizontal, Scissors, X } from 'lucide-react';
 import { patronService } from '../services/api';
+import { FABRIC_TYPES } from '../data/fabricTypes';
+
+const TISSU_CATEGORIES = ['Chaîne et trame', 'Maille'];
 
 const FILTRES_ACTIFS = true;
 
@@ -55,7 +58,7 @@ function PatronFilters({ onFilter, matchTissu, onClearMatch }) {
     typeAccessoires: [],
     manches: [],
     longueurs: [],
-    tissuTypes: [],
+    tissuCategories: [],
     tissuSpecifique: [],
     details: [],
     taillesDisponibles: [],
@@ -71,7 +74,6 @@ function PatronFilters({ onFilter, matchTissu, onClearMatch }) {
     types: [],
     manches: [],
     longueurs: [],
-    tissuTypes: [],
     tissuSpecifique: [],
     details: [],
     taillesDisponibles: [],
@@ -98,7 +100,7 @@ function PatronFilters({ onFilter, matchTissu, onClearMatch }) {
     if (!matchTissu) return;
     const updates = {};
     if (matchTissu.type === 'Chaîne et trame' || matchTissu.type === 'Maille') {
-      updates.tissuTypes = [matchTissu.type];
+      updates.tissuCategories = [matchTissu.type];
     }
     if (matchTissu.quantite != null && matchTissu.quantite > 0) {
       updates.metrageMaxDispo = matchTissu.quantite;
@@ -168,7 +170,7 @@ function PatronFilters({ onFilter, matchTissu, onClearMatch }) {
       typeAccessoires: [],
       manches: [],
       longueurs: [],
-      tissuTypes: [],
+      tissuCategories: [],
       tissuSpecifique: [],
       details: [],
       taillesDisponibles: [],
@@ -185,7 +187,7 @@ function PatronFilters({ onFilter, matchTissu, onClearMatch }) {
 
   const hasActiveFilters = filters.searchText || filters.langues.length > 0 || filters.genres.length > 0
     || filters.types.length > 0 || filters.typeAccessoires.length > 0 || filters.manches.length > 0
-    || filters.longueurs.length > 0 || filters.tissuTypes.length > 0 || filters.tissuSpecifique.length > 0
+    || filters.longueurs.length > 0 || filters.tissuCategories.length > 0 || filters.tissuSpecifique.length > 0
     || filters.details.length > 0 || filters.taillesDisponibles.length > 0 || filters.taillesEnfant.length > 0
     || filters.metrageRanges.length > 0 || filters.metrageMaxDispo != null || filters.cousu;
 
@@ -402,15 +404,15 @@ function PatronFilters({ onFilter, matchTissu, onClearMatch }) {
           <Box sx={grid3}>
             <FormControl fullWidth>
               <InputLabel sx={filterInputLabelSx}>Type de tissu</InputLabel>
-              <Select multiple value={filters.tissuTypes}
-                onChange={(e) => handleChange('tissuTypes', e.target.value)}
+              <Select multiple value={filters.tissuCategories}
+                onChange={(e) => handleChange('tissuCategories', e.target.value)}
                 input={<OutlinedInput label="Type de tissu" />}
                 renderValue={(selected) => selected.join(', ')}
                 sx={filterSelectSx}>
-                {options.tissuTypes.map((type) => (
-                  <MenuItem key={type} value={type}>
-                    <Checkbox checked={filters.tissuTypes.indexOf(type) > -1} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
-                    <ListItemText primary={type} />
+                {TISSU_CATEGORIES.map((cat) => (
+                  <MenuItem key={cat} value={cat}>
+                    <Checkbox checked={filters.tissuCategories.indexOf(cat) > -1} sx={{ color: '#33658a', '&.Mui-checked': { color: '#33658a' } }} />
+                    <ListItemText primary={cat} />
                   </MenuItem>
                 ))}
               </Select>

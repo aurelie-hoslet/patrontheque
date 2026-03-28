@@ -6,7 +6,7 @@ import {
   Paper, Chip, Tooltip
 } from '@mui/material';
 import { Bookmark, Plus, Trash2, ExternalLink, ImagePlus, X, Flame, Star, Moon, Clipboard } from 'lucide-react';
-import { wishlistService, ogService } from '../services/api';
+import { wishlistService, ogService, historiqueService } from '../services/api';
 
 const defaultForm = { nom: '', marque: '', type: 'patron', priorite: 'moyenne', lien: '', image: '', notes: '' };
 
@@ -211,13 +211,14 @@ function WishList() {
             const prio = PRIORITE[item.priorite] || PRIORITE.moyenne;
             const PrioIcon = prio.icon;
             return (
-              <Paper key={item._id} elevation={0} sx={{
+              <Paper key={item._id} elevation={0} onClick={() => historiqueService.track({ id: item._id, type: 'wishlist', nom: item.nom, image: item.image || null }).catch(() => {})} sx={{
                 border: '1.5px solid rgba(26,19,10,0.07)',
                 borderTop: `3px solid ${prio.color}`,
                 borderRadius: 3,
                 overflow: 'hidden',
                 display: 'flex', flexDirection: 'column',
                 transition: 'all 0.15s',
+                cursor: 'default',
                 '&:hover': { boxShadow: '0 4px 16px rgba(26,19,10,0.1)', transform: 'translateY(-2px)' },
               }}>
                 {item.image && (

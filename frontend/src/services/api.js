@@ -9,6 +9,7 @@ export const patronService = {
   update: (id, patron) => axios.put(`${API_URL}/patrons/${id}`, patron),
   delete: (id) => axios.delete(`${API_URL}/patrons/${id}`),
   search: (filters) => axios.post(`${API_URL}/patrons/search`, filters),
+  names: (q) => axios.get(`${API_URL}/patrons/names`, { params: { q } }),
   getFilterOptions: () => axios.get(`${API_URL}/stats/filter-options`),
   setARevoir: (id, aRevoir) => axios.patch(`${API_URL}/patrons/${id}/aRevoir`, { aRevoir }),
   setComplet: (id, complet) => axios.patch(`${API_URL}/patrons/${id}/complet`, { complet }),
@@ -71,4 +72,9 @@ export const mensurationsService = {
 
 export const updateService = {
   check: () => axios.get(`${API_URL}/check-update`),
+};
+
+export const historiqueService = {
+  getAll: () => axios.get(`${API_URL}/historique`),
+  track: (item) => axios.post(`${API_URL}/historique`, item),
 };

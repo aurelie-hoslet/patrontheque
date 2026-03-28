@@ -9,7 +9,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import UndoIcon from '@mui/icons-material/Undo';
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
-import { projetService } from '../services/api';
+import { projetService, historiqueService } from '../services/api';
 
 const defaultAdd = { nom: '', patronId: '', tissuId: '', dateFin: '', notes: '', image: '' };
 
@@ -31,6 +31,17 @@ function GalerieProjets({ projets, patrons, tissus, loading, onRefresh }) {
     if (p) return `${p.marque} — ${p.modele}`;
     return 'Projet sans nom';
   };
+
+  useEffect(() => {
+    if (detailProjet?._id) {
+      historiqueService.track({
+        id: detailProjet._id,
+        type: 'projet',
+        nom: getNomProjet(detailProjet),
+        image: detailProjet.image || getPatron(detailProjet.patronId)?.imagePrincipale || null,
+      }).catch(() => {});
+    }
+  }, [detailProjet?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRemettreEnCours = async () => {
     if (!window.confirm(`Remettre "${getNomProjet(detailProjet)}" en cours ?`)) return;

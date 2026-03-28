@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box, Paper, CardMedia, Typography, Button, IconButton,
   LinearProgress, Checkbox, Dialog, DialogTitle, DialogContent,
   DialogActions, CircularProgress, Chip, Tooltip
 } from '@mui/material';
 import { Plus, Pencil, Trash2, CheckCircle, FolderOpen } from 'lucide-react';
-import { projetService } from '../services/api';
+import { projetService, historiqueService } from '../services/api';
 import ProjetForm from './ProjetForm';
 
 function ProjetEnCours({ projets, patrons, tissus, loading, onRefresh }) {
@@ -13,6 +13,17 @@ function ProjetEnCours({ projets, patrons, tissus, loading, onRefresh }) {
   const [editingProjet, setEditingProjet] = useState(null);
   const [terminerTarget, setTerminerTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  useEffect(() => {
+    if (editingProjet?._id) {
+      historiqueService.track({
+        id: editingProjet._id,
+        type: 'projet',
+        nom: getNomProjet(editingProjet),
+        image: editingProjet.image || null,
+      }).catch(() => {});
+    }
+  }, [editingProjet?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const enCours = projets.filter(p => p.statut === 'En cours' || p.statut === 'Idée');
 

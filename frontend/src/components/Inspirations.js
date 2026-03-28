@@ -4,7 +4,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, Chip
 } from '@mui/material';
 import { Sparkles, Plus, Trash2, ImagePlus, Clipboard, X } from 'lucide-react';
-import { inspirationService } from '../services/api';
+import { inspirationService, historiqueService } from '../services/api';
 
 const defaultForm = { titre: '', image: '', source: '', notes: '', tags: '' };
 
@@ -34,6 +34,17 @@ function Inspirations() {
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => { loadInspirations(); }, []);
+
+  useEffect(() => {
+    if (detail?._id) {
+      historiqueService.track({
+        id: detail._id,
+        type: 'inspiration',
+        nom: detail.titre || 'Inspiration',
+        image: detail.image || null,
+      }).catch(() => {});
+    }
+  }, [detail?._id]);
 
   useEffect(() => {
     if (!addOpen) return;

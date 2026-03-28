@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Box, Paper, CardMedia, Typography, Chip,
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Button, IconButton, Tooltip
 } from '@mui/material';
-import { Layers, Plus, Pencil, Trash2, X, Shuffle } from 'lucide-react';
-import { tissuService } from '../services/api';
+import { Layers, Plus, Pencil, Trash2, X, Shuffle, Scissors } from 'lucide-react';
+import { tissuService, patronService, historiqueService } from '../services/api';
 import TissuForm from './TissuForm';
+import PatronModal from './PatronModal';
+import FloatingPatronCard from './FloatingPatronCard';
 
 const COULEURS_MAP = {
   rouge: '#e53935', bleu: '#1e88e5', vert: '#43a047', jaune: '#fdd835',
@@ -19,6 +22,71 @@ function TissuList({ tissus, loading, onRefresh, onMatchTissu }) {
   const [formOpen, setFormOpen] = useState(false);
   const [detailTissu, setDetailTissu] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [linkedPatron, setLinkedPatron] = useState(null);
+  const [linkedPatronOpen, setLinkedPatronOpen] = useState(false);
+  const [matchingPatrons, setMatchingPatrons] = useState(null);
+  const [floatingPatrons, setFloatingPatrons] = useState([]);
+  const [topZ, setTopZ] = useState(1500);
+
+  useEffect(() => {
+    if (detailTissu?._id) {
+      historiqueService.track({
+        id: detailTissu._id,
+        type: 'tissu',
+        nom: detailTissu.nom,
+        image: detailTissu.image || null,
+      }).catch(() => {});
+    }
+  }, [detailTissu?._id]);
+
+  useEffect(() => {
+    if (!detailTissu?.typeTissu) { setMatchingPatrons([]); return; }
+    setMatchingPatrons(null);
+    setFloatingPatrons([]);
+    patronService.getAll()
+      .then(res => setMatchingPatrons(res.data.filter(p => p.tissusConseilles?.includes(detailTissu.typeTissu))))
+      .catch(() => setMatchingPatrons([]));
+  }, [detailTissu?._id]);
+
+  const openFloatingPatron = (patron) => {
+    const already = floatingPatrons.find(f => f.patron._id === patron._id);
+    const nextZ = topZ + 1;
+    setTopZ(nextZ);
+    if (already) {
+      setFloatingPatrons(prev => prev.map(f => f.patron._id === patron._id ? { ...f, zIndex: nextZ } : f));
+      return;
+    }
+    const offset = floatingPatrons.length * 28;
+    setFloatingPatrons(prev => [...prev, {
+      id: patron._id,
+      patron,
+      x: Math.min(window.innerWidth / 2 - 132 + offset, window.innerWidth - 280),
+      y: Math.max(80 + offset, 60),
+      zIndex: nextZ,
+    }]);
+  };
+
+  const closeFloatingPatron = (id) => setFloatingPatrons(prev => prev.filter(f => f.id !== id));
+
+  const bringToFront = (id) => {
+    const nextZ = topZ + 1;
+    setTopZ(nextZ);
+    setFloatingPatrons(prev => prev.map(f => f.id === id ? { ...f, zIndex: nextZ } : f));
+  };
+
+  const moveFloatingPatron = (id, x, y) => {
+    setFloatingPatrons(prev => prev.map(f => f.id === id ? { ...f, x, y } : f));
+  };
+
+  const handleOpenLinkedPatron = async (patronId) => {
+    try {
+      const res = await patronService.getById(patronId);
+      setLinkedPatron(res.data);
+      setLinkedPatronOpen(true);
+    } catch (err) {
+      console.error('Erreur chargement patron lié:', err);
+    }
+  };
 
   const handleOpenForm = (tissu = null) => {
     setEditingTissu(tissu);
@@ -51,9 +119,14 @@ function TissuList({ tissus, loading, onRefresh, onMatchTissu }) {
     <Box>
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 900 }}>
-          Les Tissus
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+          <Typography variant="h4" sx={{ fontWeight: 900 }}>
+            Les Tissus
+          </Typography>
+          <Typography sx={{ fontWeight: 700, color: '#0cbaba', fontSize: '1.1rem' }}>
+            {tissus.reduce((sum, t) => sum + (parseFloat(t.quantite) || 0), 0).toFixed(1)} m en stock
+          </Typography>
+        </Box>
         <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => handleOpenForm(null)}
           sx={{ bgcolor: '#33658a', '&:hover': { bgcolor: '#1e4d6b' }, fontWeight: 700, borderRadius: 2 }}>
           Ajouter un tissu
@@ -185,7 +258,24 @@ function TissuList({ tissus, loading, onRefresh, onMatchTissu }) {
                   </Box>
                 )}
                 {detailTissu.quantite != null && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Quantité</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.quantite} m</Typography></Box>}
+                {detailTissu.laize != null && detailTissu.laize !== '' && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Laize</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.laize} cm</Typography></Box>}
+                {detailTissu.matiere && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Matière principale</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.matiere}</Typography></Box>}
                 {detailTissu.provenance && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Provenance</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.provenance}</Typography></Box>}
+                {detailTissu.destination && (
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    <Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Destination</Typography>
+                    {detailTissu.patronId ? (
+                      <Typography
+                        onClick={() => handleOpenLinkedPatron(detailTissu.patronId)}
+                        sx={{ fontWeight: 700, fontSize: '0.85rem', color: '#33658a', cursor: 'pointer', textDecoration: 'underline', '&:hover': { color: '#1e4d6b' } }}
+                      >
+                        {detailTissu.destination}
+                      </Typography>
+                    ) : (
+                      <Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.destination}</Typography>
+                    )}
+                  </Box>
+                )}
                 {detailTissu.composition && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Composition</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.composition}</Typography></Box>}
                 {detailTissu.poids != null && detailTissu.poids !== '' && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Poids</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{detailTissu.poids} g/m²</Typography></Box>}
                 {(detailTissu.lave || detailTissu.dejaUtilise) && (
@@ -195,6 +285,61 @@ function TissuList({ tissus, loading, onRefresh, onMatchTissu }) {
                   </Box>
                 )}
               </Box>
+
+              {/* Patrons compatibles */}
+              {detailTissu.typeTissu && (
+                <Box sx={{ mt: 2, pt: 2, borderTop: '2px solid rgba(227,99,151,0.12)' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.25 }}>
+                    <Scissors size={15} color="#e36397" strokeWidth={2} />
+                    <Typography variant="subtitle2" sx={{ color: '#e36397', fontWeight: 700 }}>
+                      Patrons compatibles dans ma collection
+                    </Typography>
+                  </Box>
+                  {matchingPatrons === null ? (
+                    <CircularProgress size={18} sx={{ color: '#e36397' }} />
+                  ) : matchingPatrons.length === 0 ? (
+                    <Typography sx={{ fontSize: '0.85rem', color: 'text.secondary', fontStyle: 'italic' }}>
+                      Aucun patron compatible dans ta collection.
+                    </Typography>
+                  ) : (
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 1 }}>
+                      {matchingPatrons.map(p => (
+                        <Box key={p._id} onClick={() => openFloatingPatron(p)} sx={{
+                          borderRadius: 2, overflow: 'hidden',
+                          border: '1.5px solid rgba(227,99,151,0.15)',
+                          bgcolor: 'white', cursor: 'pointer',
+                          transition: 'all 0.15s',
+                          '&:hover': { boxShadow: '0 4px 14px rgba(227,99,151,0.15)', transform: 'translateY(-2px)', borderColor: '#e3639766' },
+                        }}>
+                          {p.imagePrincipale ? (
+                            <Box sx={{ height: 80, overflow: 'hidden' }}>
+                              <Box component="img" src={p.imagePrincipale} alt={p.modele}
+                                sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </Box>
+                          ) : (
+                            <Box sx={{ height: 80, bgcolor: 'rgba(227,99,151,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Scissors size={24} color="#e36397" strokeWidth={1.5} style={{ opacity: 0.25 }} />
+                            </Box>
+                          )}
+                          <Box sx={{ px: 1, pt: 0.6, pb: 0.75 }}>
+                            <Typography sx={{ fontWeight: 700, fontSize: '0.78rem', lineHeight: 1.2 }} noWrap>
+                              {p.modele}
+                            </Typography>
+                            <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary' }} noWrap>
+                              {p.marque}
+                            </Typography>
+                            {p.types?.length > 0 && (
+                              <Typography sx={{ fontSize: '0.68rem', color: '#e36397', fontWeight: 700, mt: 0.25 }} noWrap>
+                                {p.types[0]}
+                              </Typography>
+                            )}
+                          </Box>
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+                </Box>
+              )}
             </DialogContent>
             <DialogActions sx={{ justifyContent: 'space-between', p: 2 }}>
               <Button startIcon={<Trash2 size={16} />} variant="outlined"
@@ -229,6 +374,31 @@ function TissuList({ tissus, loading, onRefresh, onMatchTissu }) {
             onCancel={() => { setFormOpen(false); setEditingTissu(null); }} />
         </DialogContent>
       </Dialog>
+
+      {/* Fenêtres flottantes patrons — portail hors du DOM du Dialog */}
+      {floatingPatrons.map(f => createPortal(
+        <FloatingPatronCard
+          key={f.id}
+          patron={f.patron}
+          x={f.x}
+          y={f.y}
+          zIndex={f.zIndex}
+          onClose={() => closeFloatingPatron(f.id)}
+          onBringToFront={() => bringToFront(f.id)}
+          onMove={(x, y) => moveFloatingPatron(f.id, x, y)}
+          onOpenFull={() => { setLinkedPatron(f.patron); setLinkedPatronOpen(true); }}
+        />,
+        document.body
+      ))}
+
+      {/* Popup patron lié */}
+      <PatronModal
+        open={linkedPatronOpen}
+        patron={linkedPatron}
+        onClose={() => setLinkedPatronOpen(false)}
+        onEdit={() => {}}
+        onDelete={() => {}}
+      />
 
       {/* Dialog confirmation suppression */}
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} PaperProps={{ sx: { borderRadius: 3 } }}>

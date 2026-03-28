@@ -10,6 +10,7 @@ import {
   Pencil, Scissors, Check, ClipboardCopy, Clock, Camera, BarChart2, X
 } from 'lucide-react';
 import { patronService } from '../services/api';
+import { FABRIC_TYPES } from '../data/fabricTypes';
 
 const GENRES = ['Femme', 'Homme', 'Enfant', 'Bébé', 'Unisexe', 'Accessoire'];
 const TYPES = ['Anorak', 'Blouse', 'Blouson', 'Body', 'Boxer', 'Brassière', 'Chemise', 'Chemisier', 'Combi', 'Culotte',
@@ -19,7 +20,6 @@ const TYPES = ['Anorak', 'Blouse', 'Blouson', 'Body', 'Boxer', 'Brassière', 'Ch
   'Top', 'Veste'];
 const MANCHES = ['Manches Longues', 'Manches 3/4', 'Manches Courtes', 'Sans Manches'];
 const LONGUEURS = ['Courte', 'Genou', 'Longue'];
-const TISSU_TYPES = ['Chaîne et trame', 'Maille'];
 const TAILLES = ['XS', 'S', 'M', 'L', 'XL', '2X', '3X', '4X+'];
 const TAILLES_ENFANT = ['1 an', '2 ans', '3 ans', '4 ans', '5 ans', '6 ans', '8 ans', '10 ans', '12 ans', '14 ans', '16 ans'];
 const TAILLES_BEBE = ['Prématuré', 'Naissance', '1 mois', '3 mois', '6 mois', '9 mois', '12 mois', '18 mois', '24 mois'];
@@ -131,33 +131,9 @@ function ImageField({ label, icon: Icon, value, onChange, onPaste, dashed }) {
 }
 
 function HoverSelect({ children, MenuProps: menuPropsProp, ...props }) {
-  const [open, setOpen] = useState(false);
-  const closeTimer = useRef(null);
-
-  const handleEnter = () => {
-    clearTimeout(closeTimer.current);
-    setOpen(true);
-  };
-  const handleLeave = () => {
-    closeTimer.current = setTimeout(() => setOpen(false), 100);
-  };
-
   return (
-    <Box sx={{ width: '100%' }} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
-      <Select
-        {...props}
-        open={open}
-        onOpen={() => setOpen(true)}
-        onClose={() => setOpen(false)}
-        MenuProps={{
-          ...menuPropsProp,
-          PaperProps: {
-            ...menuPropsProp?.PaperProps,
-            onMouseEnter: handleEnter,
-            onMouseLeave: handleLeave,
-          },
-        }}
-      >
+    <Box sx={{ width: '100%' }}>
+      <Select {...props} MenuProps={menuPropsProp}>
         {children}
       </Select>
     </Box>
@@ -174,7 +150,6 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
     typeAccessoires: [],
     manches: [],
     longueurs: [],
-    tissuTypes: [],
     tissuSpecifique: [],
     details: [],
     taillesIndiquees: '',
@@ -206,6 +181,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
     recopie: false,
     vintage: false,
     typePlanche: '',
+    tissusConseilles: [],
   });
 
   const [tissuInput, setTissuInput] = useState('');
@@ -218,6 +194,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
   const pdfInputRef = useRef(null);
   const [options, setOptions] = useState({ marques: [], typeAccessoires: [], tissuSpecifique: [], details: [] });
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [openFabricCats, setOpenFabricCats] = useState({});
   const [confirmPdfDeleteInfo, setConfirmPdfDeleteInfo] = useState(null);
 
   useEffect(() => {
@@ -240,6 +217,15 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
       recopie: patron.recopie || false,
       vintage: patron.vintage || false,
       typePlanche: patron.typePlanche || '',
+      tissusConseilles: patron.tissusConseilles || [],
+      });
+      // Initialiser l'état d'ouverture des catégories depuis tissusConseilles (nouveau)
+      // ou tissuTypes (ancienne donnée), pour ne pas perdre les assignations existantes
+      const tc = patron.tissusConseilles || [];
+      const tt = patron.tissuTypes || [];
+      setOpenFabricCats({
+        chaineEtTrame: tc.some(v => FABRIC_TYPES.chaineEtTrame.values.includes(v)) || tt.includes('Chaîne et trame'),
+        maille: tc.some(v => FABRIC_TYPES.maille.values.includes(v)) || tt.includes('Maille'),
       });
       if (patron.pdfPath) {
         patronService.getPdfs(patron._id)
@@ -460,6 +446,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
           <Box>
             <Autocomplete
               freeSolo
+              openOnFocus
               options={options.marques}
               value={formData.marque}
               inputValue={formData.marque}
@@ -612,35 +599,12 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
             </Box>
           )}
 
-          {/* Type de tissu */}
-          <Box>
-            <FormControl fullWidth>
-              <InputLabel sx={roseInputLabelSx}>Type de tissu</InputLabel>
-              <HoverSelect
-                multiple value={formData.tissuTypes}
-                onChange={(e) => handleChange('tissuTypes', e.target.value)}
-                input={<OutlinedInput label="Type de tissu" />}
-                renderValue={(selected) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((value) => <Chip key={value} label={value} sx={{ bgcolor: '#ffddd2', fontWeight: 700 }} />)}
-                  </Box>
-                )}
-                sx={roseSelectSx}
-              >
-                {TISSU_TYPES.map((type) => (
-                  <MenuItem key={type} value={type}>
-                    <Checkbox checked={formData.tissuTypes.indexOf(type) > -1} />
-                    <ListItemText primary={type} sx={{ '& .MuiTypography-root': { fontWeight: 600 } }} />
-                  </MenuItem>
-                ))}
-              </HoverSelect>
-            </FormControl>
-          </Box>
 
           {/* Besoin spécifique */}
           <Box>
             <Autocomplete
               freeSolo
+              openOnFocus
               options={options.tissuSpecifique.filter(o => !formData.tissuSpecifique.includes(o))}
               inputValue={tissuInput}
               onInputChange={(_, newValue, reason) => { if (reason === 'input') setTissuInput(newValue); }}
@@ -657,6 +621,96 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
                 <Chip key={tissu} label={tissu} onDelete={() => handleRemoveTag('tissuSpecifique', tissu)}
                   sx={{ bgcolor: '#ffddd2', fontWeight: 700, fontSize: '0.9rem' }} />
               ))}
+            </Box>
+          </Box>
+
+          {/* Tissus conseillés */}
+          <Box sx={{ gridColumn: { sm: '1 / -1' } }}>
+            <Typography sx={{ fontWeight: 700, color: '#e36397', fontSize: '0.85rem', mb: 1.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Tissus conseillés
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              {Object.entries(FABRIC_TYPES).map(([catKey, cat]) => {
+                const catOpen = !!openFabricCats[catKey];
+                const selCount = cat.values.filter(v => formData.tissusConseilles.includes(v)).length;
+                const catChecked = selCount > 0;
+                const catIndeterminate = selCount > 0 && selCount < cat.values.length;
+                const toggleFold = () => setOpenFabricCats(prev => ({ ...prev, [catKey]: !prev[catKey] }));
+                const toggleCatCheckbox = () => {
+                  if (catChecked) {
+                    handleChange('tissusConseilles', formData.tissusConseilles.filter(v => !cat.values.includes(v)));
+                  } else {
+                    handleChange('tissusConseilles', [...new Set([...formData.tissusConseilles, ...cat.values])]);
+                    setOpenFabricCats(prev => ({ ...prev, [catKey]: true }));
+                  }
+                };
+                const toggleItem = (val) => {
+                  const already = formData.tissusConseilles.includes(val);
+                  handleChange('tissusConseilles', already
+                    ? formData.tissusConseilles.filter(v => v !== val)
+                    : [...formData.tissusConseilles, val]);
+                };
+                return (
+                  <Box key={catKey}>
+                    {/* Niveau 1 — catégorie */}
+                    <Box
+                      sx={{
+                        display: 'flex', alignItems: 'center', gap: 1,
+                        px: 1, py: 0.6, userSelect: 'none', borderRadius: 1.5,
+                        bgcolor: catOpen ? 'rgba(227,99,151,0.08)' : 'transparent',
+                      }}
+                    >
+                      <Checkbox
+                        checked={catChecked}
+                        indeterminate={catIndeterminate}
+                        size="small"
+                        sx={{ p: 0, color: '#e36397', '&.Mui-checked': { color: '#e36397' }, '&.MuiCheckbox-indeterminate': { color: '#e36397' } }}
+                        onChange={toggleCatCheckbox}
+                      />
+                      <Typography
+                        onClick={toggleFold}
+                        sx={{ fontWeight: 700, fontSize: '0.85rem', color: '#e36397', flex: 1, cursor: 'pointer', '&:hover': { opacity: 0.75 } }}
+                      >
+                        {cat.label}
+                      </Typography>
+                      {!catOpen && selCount > 0 && (
+                        <Box sx={{ bgcolor: '#e36397', color: 'white', borderRadius: 10, fontSize: '0.68rem', fontWeight: 800, px: 0.85, lineHeight: 1.8 }}>
+                          {selCount}
+                        </Box>
+                      )}
+                    </Box>
+
+                    {/* Niveau 2 — types de tissus (visible si catégorie cochée) */}
+                    {catOpen && (
+                      <Box sx={{ ml: 3.5, mt: 0.25, mb: 0.5, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 0 }}>
+                        {cat.values.map((val) => {
+                          const checked = formData.tissusConseilles.includes(val);
+                          return (
+                            <Box
+                              key={val}
+                              onClick={() => toggleItem(val)}
+                              sx={{
+                                display: 'flex', alignItems: 'center', gap: 0.75,
+                                py: 0.3, px: 0.5, cursor: 'pointer', borderRadius: 1,
+                                '&:hover': { bgcolor: 'rgba(227,99,151,0.07)' },
+                              }}
+                            >
+                              <Checkbox
+                                checked={checked}
+                                size="small"
+                                sx={{ p: 0, color: 'rgba(227,99,151,0.5)', '&.Mui-checked': { color: '#e36397' } }}
+                              />
+                              <Typography sx={{ fontSize: '0.8rem', fontWeight: checked ? 700 : 400, color: checked ? '#e36397' : 'text.primary' }}>
+                                {val}
+                              </Typography>
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                    )}
+                  </Box>
+                );
+              })}
             </Box>
           </Box>
 
@@ -684,6 +738,7 @@ function PatronForm({ patron, onSave, onCancel, onDelete }) {
           <Box sx={{ gridColumn: { sm: '1 / -1' } }}>
             <Autocomplete
               freeSolo
+              openOnFocus
               options={options.details.filter(o => !formData.details.includes(o))}
               inputValue={detailInput}
               onInputChange={(_, newValue, reason) => { if (reason === 'input') setDetailInput(newValue); }}

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Dialog, DialogTitle, DialogContent,
   Typography, Box, IconButton, Popover,
   CircularProgress, Button, Chip
 } from '@mui/material';
-import { X, Pencil, Lightbulb, FileText, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
-import { patronService } from '../services/api';
+import { X, Pencil, Lightbulb, FileText, ChevronLeft, ChevronRight, ExternalLink, Layers } from 'lucide-react';
+import { patronService, tissuService, historiqueService } from '../services/api';
+import FloatingTissuCard from './FloatingTissuCard';
 
 const LANGUE_DRAPEAUX = {
   'Français': { img: 'https://flagcdn.com/20x15/fr.png' },
@@ -36,19 +38,77 @@ function PatronModal({ open, patron, onClose, onEdit, onDelete }) {
   const [aSavoirAnchor, setASavoirAnchor] = useState(null);
   const [pdfs, setPdfs] = useState(null);
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const [matchingTissus, setMatchingTissus] = useState(null);
+  const [floatingTissus, setFloatingTissus] = useState([]);
+  const [topZ, setTopZ] = useState(1500);
+  const [fullTissu, setFullTissu] = useState(null);
+
+  React.useEffect(() => {
+    if (open && patron?._id) {
+      historiqueService.track({
+        id: patron._id,
+        type: 'patron',
+        nom: [patron.marque, patron.modele].filter(Boolean).join(' – '),
+        image: patron.imagePrincipale || null,
+      }).catch(() => {});
+    }
+  }, [open, patron?._id]);
 
   React.useEffect(() => {
     if (open) {
       window.scrollTo(0, 0);
       setPdfs(null);
       setCarouselIndex(0);
+      setMatchingTissus(null);
+      setFloatingTissus([]);
+      setFullTissu(null);
       if (patron?.pdfPath) {
         patronService.getPdfs(patron._id)
           .then(res => setPdfs(res.data))
           .catch(() => setPdfs([]));
       }
+      if (patron?.tissusConseilles?.length > 0) {
+        tissuService.getAll()
+          .then(res => {
+            const tc = patron.tissusConseilles;
+            setMatchingTissus(res.data.filter(t => t.typeTissu && tc.includes(t.typeTissu)));
+          })
+          .catch(() => setMatchingTissus([]));
+      } else {
+        setMatchingTissus([]);
+      }
     }
   }, [open, patron?._id]);
+
+  const openFloating = (tissu) => {
+    const already = floatingTissus.find(f => f.tissu._id === tissu._id);
+    const nextZ = topZ + 1;
+    setTopZ(nextZ);
+    if (already) {
+      setFloatingTissus(prev => prev.map(f => f.tissu._id === tissu._id ? { ...f, zIndex: nextZ } : f));
+      return;
+    }
+    const offset = floatingTissus.length * 28;
+    setFloatingTissus(prev => [...prev, {
+      id: tissu._id,
+      tissu,
+      x: Math.min(window.innerWidth / 2 - 132 + offset, window.innerWidth - 280),
+      y: Math.max(80 + offset, 60),
+      zIndex: nextZ,
+    }]);
+  };
+
+  const closeFloating = (id) => setFloatingTissus(prev => prev.filter(f => f.id !== id));
+
+  const bringToFront = (id) => {
+    const nextZ = topZ + 1;
+    setTopZ(nextZ);
+    setFloatingTissus(prev => prev.map(f => f.id === id ? { ...f, zIndex: nextZ } : f));
+  };
+
+  const moveFloating = (id, x, y) => {
+    setFloatingTissus(prev => prev.map(f => f.id === id ? { ...f, x, y } : f));
+  };
 
   if (!patron) return null;
 
@@ -193,11 +253,11 @@ function PatronModal({ open, patron, onClose, onEdit, onDelete }) {
             {patron.longueurs?.length > 0 && (
               <InfoCard label="Longueur" color="#fff8e1">{patron.longueurs.join(', ')}</InfoCard>
             )}
-            {patron.tissuTypes?.length > 0 && (
-              <InfoCard label="Type de tissu" color="#e0f7fa">{patron.tissuTypes.join(', ')}</InfoCard>
-            )}
             {patron.tissuSpecifique?.length > 0 && (
               <InfoCard label="Besoins spécifiques" color="#fbe9e7">{patron.tissuSpecifique.join(', ')}</InfoCard>
+            )}
+            {patron.tissusConseilles?.length > 0 && (
+              <InfoCard label="Tissus conseillés" color="#fce4ec" fullWidth>{patron.tissusConseilles.join(', ')}</InfoCard>
             )}
             {patron.details?.length > 0 && (
               <InfoCard label="Détails" color="#f9fbe7">{patron.details.join(', ')}</InfoCard>
@@ -304,6 +364,65 @@ function PatronModal({ open, patron, onClose, onEdit, onDelete }) {
             </Box>
           )}
 
+          {/* Tissus compatibles */}
+          {patron.tissusConseilles?.length > 0 && (
+            <Box sx={{ mt: 1, pt: 2, borderTop: '2px solid rgba(51,101,138,0.12)' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                <Layers size={15} color="#33658a" strokeWidth={2} />
+                <Typography variant="subtitle2" sx={{ color: '#33658a', fontWeight: 700 }}>
+                  Tissus compatibles dans mon stash
+                </Typography>
+              </Box>
+              {matchingTissus === null ? (
+                <CircularProgress size={18} sx={{ color: '#33658a' }} />
+              ) : matchingTissus.length === 0 ? (
+                <Typography sx={{ fontSize: '0.85rem', color: 'text.secondary', fontStyle: 'italic' }}>
+                  Aucun tissu compatible dans ton stash.
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 1.25 }}>
+                  {matchingTissus.map(t => (
+                    <Box key={t._id} onClick={() => openFloating(t)} sx={{
+                      borderRadius: 2.5, overflow: 'hidden',
+                      border: '1.5px solid rgba(51,101,138,0.15)',
+                      bgcolor: 'white', cursor: 'pointer',
+                      transition: 'all 0.15s',
+                      '&:hover': { boxShadow: '0 4px 14px rgba(51,101,138,0.15)', transform: 'translateY(-2px)', borderColor: '#33658a66' },
+                    }}>
+                      {/* Photo */}
+                      {t.image ? (
+                        <Box sx={{ height: 90, overflow: 'hidden' }}>
+                          <Box component="img" src={t.image} alt={t.nom}
+                            sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </Box>
+                      ) : (
+                        <Box sx={{ height: 90, bgcolor: 'rgba(51,101,138,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Layers size={28} color="#33658a" strokeWidth={1.5} style={{ opacity: 0.3 }} />
+                        </Box>
+                      )}
+                      {/* Infos */}
+                      <Box sx={{ px: 1.25, pt: 0.75, pb: 1 }}>
+                        <Typography sx={{ fontWeight: 700, fontSize: '0.8rem', lineHeight: 1.2, mb: 0.25 }} noWrap>
+                          {t.nom}
+                        </Typography>
+                        {(t.precisionCouleur || t.teinte) && (
+                          <Typography sx={{ fontSize: '0.72rem', color: 'text.secondary', lineHeight: 1.2 }} noWrap>
+                            {t.precisionCouleur || t.teinte}
+                          </Typography>
+                        )}
+                        {t.quantite != null && (
+                          <Typography sx={{ fontSize: '0.75rem', fontWeight: 800, color: '#33658a', mt: 0.5 }}>
+                            {t.quantite} m
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          )}
+
           {/* Lien boutique */}
           {patron.lienShop && (
             <Box sx={{ mt: 2 }}>
@@ -323,6 +442,42 @@ function PatronModal({ open, patron, onClose, onEdit, onDelete }) {
         </DialogContent>
       </Dialog>
 
+      {/* Fiche tissu complète */}
+      <Dialog open={!!fullTissu} onClose={() => setFullTissu(null)} maxWidth="sm" fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}>
+        {fullTissu && (
+          <>
+            <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 800 }}>
+              {fullTissu.nom}
+              <IconButton size="small" onClick={() => setFullTissu(null)}><X size={18} /></IconButton>
+            </DialogTitle>
+            <DialogContent dividers>
+              {fullTissu.image && (
+                <Box component="img" src={fullTissu.image} alt={fullTissu.nom}
+                  sx={{ width: '100%', maxHeight: 280, objectFit: 'contain', mb: 2, borderRadius: 2 }} />
+              )}
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {fullTissu.typeTissu && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Type</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{fullTissu.typeTissu}</Typography></Box>}
+                {fullTissu.teinte && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Teinte</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{fullTissu.teinte}</Typography></Box>}
+                {fullTissu.precisionCouleur && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Coloris</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{fullTissu.precisionCouleur}</Typography></Box>}
+                {fullTissu.matiere && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Matière</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{fullTissu.matiere}</Typography></Box>}
+                {fullTissu.composition && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Composition</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{fullTissu.composition}</Typography></Box>}
+                {fullTissu.quantite != null && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Quantité</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem', color: '#33658a' }}>{fullTissu.quantite} m</Typography></Box>}
+                {fullTissu.laize != null && fullTissu.laize !== '' && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Laize</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{fullTissu.laize} cm</Typography></Box>}
+                {fullTissu.poids != null && fullTissu.poids !== '' && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Poids</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{fullTissu.poids} g/m²</Typography></Box>}
+                {fullTissu.provenance && <Box sx={{ display: 'flex', gap: 1 }}><Typography color="text.secondary" sx={{ fontSize: '0.85rem', minWidth: 120 }}>Provenance</Typography><Typography sx={{ fontWeight: 700, fontSize: '0.85rem' }}>{fullTissu.provenance}</Typography></Box>}
+                {(fullTissu.lave || fullTissu.dejaUtilise) && (
+                  <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mt: 0.5 }}>
+                    {fullTissu.lave && <Chip label="Lavé" size="small" sx={{ bgcolor: '#e3eef7', color: '#1e4d6b', fontWeight: 700, fontSize: '0.72rem', height: 20 }} />}
+                    {fullTissu.dejaUtilise && <Chip label="Déjà utilisé" size="small" sx={{ bgcolor: '#fef3e2', color: '#b45309', fontWeight: 700, fontSize: '0.72rem', height: 20 }} />}
+                  </Box>
+                )}
+              </Box>
+            </DialogContent>
+          </>
+        )}
+      </Dialog>
+
       {/* Lightbox */}
       <Dialog open={lightboxOpen} onClose={() => setLightboxOpen(false)} maxWidth="lg" fullWidth
         PaperProps={{ sx: { bgcolor: 'transparent', boxShadow: 'none' } }}>
@@ -334,6 +489,22 @@ function PatronModal({ open, patron, onClose, onEdit, onDelete }) {
           onClick={() => setLightboxOpen(false)}
         />
       </Dialog>
+
+      {/* Fenêtres flottantes tissus — portail hors du DOM du Dialog */}
+      {floatingTissus.map(f => createPortal(
+        <FloatingTissuCard
+          key={f.id}
+          tissu={f.tissu}
+          x={f.x}
+          y={f.y}
+          zIndex={f.zIndex}
+          onClose={() => closeFloating(f.id)}
+          onBringToFront={() => bringToFront(f.id)}
+          onMove={(x, y) => moveFloating(f.id, x, y)}
+          onOpenFull={() => setFullTissu(f.tissu)}
+        />,
+        document.body
+      ))}
     </>
   );
 }

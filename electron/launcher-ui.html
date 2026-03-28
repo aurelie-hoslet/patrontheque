@@ -135,6 +135,16 @@
       animation: pulse 1.4s ease-in-out infinite;
     }
 
+    .dot.loading {
+      background: #fb8c00;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50%       { opacity: 0.3; }
@@ -177,20 +187,31 @@
     const launched = { normal: false, test: false }
 
     function launch(mode) {
+      document.getElementById('btn-' + mode).disabled = true
       window.launcher.launch(mode)
     }
 
-    window.launcher.onStatus(({ mode, ok, message }) => {
-      if (ok) {
-        launched[mode] = true
-        const btn = document.getElementById('btn-' + mode)
-        btn.classList.add('launched')
+    window.launcher.onStatus(({ mode, ok, loading, message }) => {
+      const btn = document.getElementById('btn-' + mode)
+
+      if (loading) {
+        btn.disabled = true
+      } else {
+        btn.disabled = false
+        if (ok) {
+          launched[mode] = true
+          btn.classList.add('launched')
+        }
       }
 
       const area = document.getElementById('status-area')
-      area.innerHTML = ok
-        ? `<span class="status-msg"><span class="dot"></span>${message}</span>`
-        : `<span style="color:#e57373">${message}</span>`
+      if (loading) {
+        area.innerHTML = `<span class="status-msg"><span class="dot loading"></span>${message}</span>`
+      } else if (ok) {
+        area.innerHTML = `<span class="status-msg"><span class="dot"></span>${message}</span>`
+      } else {
+        area.innerHTML = `<span style="color:#e57373">${message}</span>`
+      }
     })
   </script>
 </body>

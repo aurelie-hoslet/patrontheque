@@ -1,8 +1,8 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
+const http = require('http')
 const { spawn } = require('child_process')
 
-// Empêche l'app launcher de créer son propre dossier userData dans AppData
 app.setName('Sewing Box Launcher')
 
 let win
@@ -25,53 +25,72 @@ function createLauncher() {
   win.loadFile(path.join(__dirname, 'launcher-ui.html'))
 }
 
-function launchApp(mode) {
-  const appRoot = path.join(__dirname, '..')
-  const electronBin = process.execPath
+function waitForServer(url, timeoutMs = 90000) {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs
+    function check() {
+      http.get(url, () => resolve()).on('error', () => {
+        if (Date.now() > deadline) reject(new Error('Timeout — serveur non disponible'))
+        else setTimeout(check, 1500)
+      })
+    }
+    check()
+  })
+}
 
-  // userData de l'instance normale = AppData\Roaming\Sewing Box (défaut)
-  // userData de l'instance test   = AppData\Roaming\Sewing Box-test
+async function launchNormal(appRoot) {
+  const env = {
+    ...process.env,
+    APP_PORT: '5000',
+    USER_DATA_PATH: path.join(appRoot, 'backend', 'data'),
+    PDF_DIR: path.join(appRoot, 'backend', 'pdfs'),
+  }
+
+  // Démarre le backend
+  spawn('node', [path.join(appRoot, 'backend', 'server.js')], {
+    cwd: appRoot, detached: true, stdio: 'ignore', env,
+  }).unref()
+
+  // Démarre le serveur React dev
+  spawn('npm', ['start', '--prefix', 'frontend'], {
+    cwd: appRoot, detached: true, stdio: 'ignore', env, shell: true,
+  }).unref()
+
+  // Attend que le serveur React soit prêt
+  await waitForServer('http://localhost:3000')
+
+  // Lance Electron en mode dev (hot reload actif)
+  spawn(process.execPath, [appRoot], {
+    detached: true, stdio: 'ignore',
+    env: { ...env, ELECTRON_DEV: 'true' },
+  }).unref()
+}
+
+function launchTest(appRoot) {
   const appDataBase = app.getPath('appData')
   const testUserDataPath = path.join(appDataBase, 'Sewing Box-test')
 
-  const normalUserDataPath = path.join(appDataBase, 'Sewing Box')
-
-  const args = [appRoot]
-  const env = { ...process.env }
-
-  if (mode === 'test') {
-    args.push(`--user-data-dir=${testUserDataPath}`)
-    env.APP_PORT = '5001'
-  } else {
-    args.push(`--user-data-dir=${normalUserDataPath}`)
-    env.APP_PORT = '5000'
-    env.USER_DATA_PATH = path.join(appRoot, 'backend', 'data')
-    env.PDF_DIR = path.join(appRoot, 'backend', 'pdfs')
-  }
-
-  const child = spawn(electronBin, args, {
-    detached: true,
-    stdio: 'ignore',
-    env,
-  })
-  child.unref()
-
-  return testUserDataPath
+  spawn(process.execPath, [appRoot, `--user-data-dir=${testUserDataPath}`], {
+    detached: true, stdio: 'ignore',
+    env: { ...process.env, APP_PORT: '5001' },
+  }).unref()
 }
 
-ipcMain.on('launch', (event, mode) => {
+ipcMain.on('launch', async (event, mode) => {
+  const appRoot = path.join(__dirname, '..')
   try {
-    const testPath = launchApp(mode)
-    const label = mode === 'test'
-      ? `Instance TEST lancée (données dans "Sewing Box-test", port 5001)`
-      : `Instance normale lancée (vos données, port 5000)`
-
-    event.reply('status', { mode, ok: true, message: label })
+    if (mode === 'normal') {
+      event.reply('status', { mode, ok: true, loading: true, message: 'Démarrage du serveur React…' })
+      await launchNormal(appRoot)
+      event.reply('status', { mode, ok: true, loading: false, message: 'Instance lancée avec vos données (port 5000)' })
+    } else {
+      launchTest(appRoot)
+      event.reply('status', { mode, ok: true, loading: false, message: 'Instance TEST lancée (données vides, port 5001)' })
+    }
   } catch (err) {
-    event.reply('status', { mode, ok: false, message: `Erreur : ${err.message}` })
+    event.reply('status', { mode, ok: false, loading: false, message: `Erreur : ${err.message}` })
   }
 })
 
 app.whenReady().then(createLauncher)
-
 app.on('window-all-closed', () => app.quit())

@@ -24,6 +24,7 @@ const dealersDb  = new Datastore({ filename: path.join(DATA_DIR, 'dealers.db'), 
 const inspDb         = new Datastore({ filename: path.join(DATA_DIR, 'inspirations.db'),  autoload: true });
 const wishlistDb     = new Datastore({ filename: path.join(DATA_DIR, 'wishlist.db'),       autoload: true });
 const mensurationsDb = new Datastore({ filename: path.join(DATA_DIR, 'mensurations.db'),   autoload: true });
+const historiqueDb   = new Datastore({ filename: path.join(DATA_DIR, 'historique.db'),     autoload: true });
 
 app.use(cors());
 app.use(express.json({ limit: '200mb' }));
@@ -60,6 +61,20 @@ app.get('/api/patrons', async (req, res) => {
   try {
     const patrons = await patronsDb.findAsync({});
     res.json(sortDocs(patrons, 'dateModification'));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/patrons/names', async (req, res) => {
+  try {
+    const q = (req.query.q || '').toLowerCase().trim();
+    const docs = await patronsDb.findAsync({});
+    const names = docs.map(({ _id, marque, modele }) => ({
+      _id,
+      label: [marque, modele].filter(Boolean).join(' — ')
+    }));
+    res.json(q ? names.filter(d => d.label.toLowerCase().includes(q)) : names);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -248,8 +263,13 @@ app.post('/api/patrons/search', async (req, res) => {
     if (filters.longueurs && filters.longueurs.length > 0) {
       query.longueurs = { $in: filters.longueurs };
     }
-    if (filters.tissuTypes && filters.tissuTypes.length > 0) {
-      query.tissuTypes = { $in: filters.tissuTypes };
+    if (filters.tissuCategories && filters.tissuCategories.length > 0) {
+      const CHAINE_VALUES = ["Popeline / Tana Lawn","Baptiste / Voile","Double gaze / Triple gaze","Chambray","Broderie anglaise","Seersucker","Gabardine","Twill / Sergé","Crêpe","Lin / Lin-coton","Viscose / Lyocell","Mousseline / Organza","Soie / Satin / Taffetas","Lainage costume (tweed, flanelle, crêpe de laine)","Lainage manteau (drap, bouclette, cachemire)","Denim / Coutil","Wax","Velours tissé","Simili cuir","Suédine","Fausse fourrure","Minky","Éponge","Résille","Tissu enduit / Toile cirée","Doublure","Imperméable / Déperlant","Softshell / Polaire"];
+      const MAILLE_VALUES = ["Jersey simple (2 sens)","Jersey 4 sens","Interlock","Molleton / Sweat","French Terry","Bord-côte","Maille côtelée","Maille stable (Milano / Ponte / Scuba)","Maille tricot","Velours extensible","Éponge / Velours éponge"];
+      const matchValues = [];
+      if (filters.tissuCategories.includes('Chaîne et trame')) matchValues.push(...CHAINE_VALUES);
+      if (filters.tissuCategories.includes('Maille')) matchValues.push(...MAILLE_VALUES);
+      if (matchValues.length > 0) query.tissusConseilles = { $in: matchValues };
     }
     if (filters.tissuSpecifique && filters.tissuSpecifique.length > 0) {
       query.tissuSpecifique = { $in: filters.tissuSpecifique };
@@ -312,7 +332,6 @@ app.post('/api/import', async (req, res) => {
           typeAccessoires: Array.isArray(patronData.typeAccessoires) ? patronData.typeAccessoires : (patronData.typeAccessoire ? [patronData.typeAccessoire] : []),
           manches: patronData.manches || [],
           longueurs: patronData.longueurs || [],
-          tissuTypes: patronData.tissuTypes || (patronData.tissuType ? [patronData.tissuType] : []),
           tissuSpecifique: capArray(Array.isArray(patronData.tissuSpecifique) ? patronData.tissuSpecifique : (patronData.tissuSpecifique ? [patronData.tissuSpecifique] : [])),
           details: capArray(Array.isArray(patronData.details) ? patronData.details : (patronData.details ? [patronData.details] : [])),
           taillesIndiquees: patronData.tailles || patronData.taillesIndiquees || '',
@@ -367,7 +386,6 @@ app.get('/api/stats/filter-options', async (req, res) => {
           return true;
         }).sort();
       })(),
-      tissuTypes: [...new Set(patrons.flatMap(p => p.tissuTypes || []))].sort(),
       tissuSpecifique: (() => {
         const seen = new Set();
         return patrons.flatMap(p => p.tissuSpecifique || []).map(capFirst).filter(s => {
@@ -879,6 +897,36 @@ app.get('/api/og-preview', async (req, res) => {
 // ── Vérification de mise à jour ───────────────────────────────────────────────
 
 const CURRENT_VERSION = '1.2.0';
+
+// ── HISTORIQUE ────────────────────────────────────────────────────────────────
+
+app.get('/api/historique', (_req, res) => {
+  historiqueDb.find({}, (err, docs) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(sortDocs(docs, 'date_ouverture'));
+  });
+});
+
+app.post('/api/historique', (req, res) => {
+  const { id, type, nom, image } = req.body;
+  if (!id || !type || !nom) return res.status(400).json({ error: 'id, type, nom requis' });
+  const date_ouverture = new Date().toISOString();
+  historiqueDb.update(
+    { id, type },
+    { $set: { id, type, nom, image: image || null, date_ouverture } },
+    { upsert: true },
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      historiqueDb.find({}, (err2, docs) => {
+        if (err2 || docs.length <= 12) return res.json({ ok: true });
+        const toDelete = sortDocs(docs, 'date_ouverture').slice(12).map(d => d._id);
+        historiqueDb.remove({ _id: { $in: toDelete } }, { multi: true }, () => res.json({ ok: true }));
+      });
+    }
+  );
+});
+
+// ── CHECK UPDATE ──────────────────────────────────────────────────────────────
 
 app.get('/api/check-update', async (req, res) => {
   try {

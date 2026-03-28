@@ -6,6 +6,7 @@ import {
 import { Plus, Ruler, Heart, Scissors, ChevronUp, X, Shuffle } from 'lucide-react';
 import PatronFilters from './PatronFilters';
 import PatronModal from './PatronModal';
+import { FABRIC_TYPES } from '../data/fabricTypes';
 import PatronForm from './PatronForm';
 import { patronService } from '../services/api';
 
@@ -267,17 +268,17 @@ function PatronList({ patrons, loading, onDelete, matchTissu, onClearMatch }) {
                   </Typography>
                 )}
 
-                {/* Type tissu chips */}
-                {patron.tissuTypes?.length > 0 && (
-                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                    {patron.tissuTypes.includes('Chaîne et trame') && (
-                      <Chip label="Chaîne et trame" size="small" sx={{ bgcolor: '#e3eef7', color: '#33658a', fontWeight: 700, fontSize: '0.65rem', height: 18 }} />
-                    )}
-                    {patron.tissuTypes.includes('Maille') && (
-                      <Chip label="Maille" size="small" sx={{ bgcolor: '#e0f7f7', color: '#0cbaba', fontWeight: 700, fontSize: '0.65rem', height: 18 }} />
-                    )}
-                  </Box>
-                )}
+                {/* Type tissu chips (dérivé de tissusConseilles) */}
+                {patron.tissusConseilles?.length > 0 && (() => {
+                  const hasCT = patron.tissusConseilles.some(v => FABRIC_TYPES.chaineEtTrame.values.includes(v));
+                  const hasMaille = patron.tissusConseilles.some(v => FABRIC_TYPES.maille.values.includes(v));
+                  return (hasCT || hasMaille) && (
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                      {hasCT && <Chip label="Chaîne et trame" size="small" sx={{ bgcolor: '#e3eef7', color: '#33658a', fontWeight: 700, fontSize: '0.65rem', height: 18 }} />}
+                      {hasMaille && <Chip label="Maille" size="small" sx={{ bgcolor: '#e0f7f7', color: '#0cbaba', fontWeight: 700, fontSize: '0.65rem', height: 18 }} />}
+                    </Box>
+                  );
+                })()}
 
                 {/* Métrage */}
                 {(patron.metrageMin || patron.metrageMax) && (

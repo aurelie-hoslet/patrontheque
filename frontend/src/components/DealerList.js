@@ -5,7 +5,7 @@ import {
   TextField, CircularProgress, Chip, FormControlLabel, Checkbox, Tooltip
 } from '@mui/material';
 import { Store, Plus, Pencil, Trash2, ExternalLink, CheckCircle } from 'lucide-react';
-import { dealerService, ogService } from '../services/api';
+import { dealerService, ogService, historiqueService } from '../services/api';
 
 const CATEGORIES = ['Tissus', 'Mercerie', 'Patrons', 'Autre'];
 
@@ -37,6 +37,17 @@ function DealerList({ dealers, loading, onRefresh }) {
   const [ogLoading, setOgLoading] = useState(false);
   const [ogError, setOgError] = useState(null);
   const ogDebounceRef = useRef(null);
+
+  useEffect(() => {
+    if (editingDealer?._id) {
+      historiqueService.track({
+        id: editingDealer._id,
+        type: 'dealer',
+        nom: editingDealer.nom,
+        image: editingDealer.image || null,
+      }).catch(() => {});
+    }
+  }, [editingDealer?._id]);
 
   const handleUrlChange = (value) => {
     setFormData(p => ({ ...p, url: value }));
