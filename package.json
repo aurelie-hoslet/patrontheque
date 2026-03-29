@@ -1,6 +1,6 @@
 {
   "name": "sewing-box",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Gestionnaire de patrons de couture",
   "author": "Sewing Box",
   "main": "electron/main.js",

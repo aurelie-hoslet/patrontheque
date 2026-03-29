@@ -896,7 +896,7 @@ app.get('/api/og-preview', async (req, res) => {
 
 // ── Vérification de mise à jour ───────────────────────────────────────────────
 
-const CURRENT_VERSION = '1.2.0';
+const CURRENT_VERSION = '1.3.0';
 
 // ── HISTORIQUE ────────────────────────────────────────────────────────────────
 
